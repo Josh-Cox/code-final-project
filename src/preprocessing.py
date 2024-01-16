@@ -122,7 +122,7 @@ def find_kings(pos):
     return np.array([w_king_pos[0][0], b_king_pos[0][0]])
 
 def check_top_rank(color, pos):
-    # check if given position is in the opposite top rank
+    # check if given king position is in the opposite top rank
     if color == 'w':
         if pos <= 7:
             return True
@@ -148,23 +148,6 @@ def king_safety_eval(king_pos, method, bitboard):
     king_edge = ['N', 'N'] #(N for none, L for left, R for right, T for top)
     white_king = king_pos[0]
     black_king = king_pos[1]
-
-    # ----- WHITE KING -----
-    
-    # check if king is on opposite top rank
-    if check_top_rank('w', white_king):
-        king_edge[0] = 'T'
-    # check for position 0 (edge case to prevent division by 0)
-    elif white_king == 0:
-        king_edge[0] = 'L'
-    # if king is at left edge
-    elif white_king % 8 == 0:
-        king_edge[0] = 'L'
-    # if king is at right edge
-    elif white_king % 8 == 7:
-        king_edge[0] = 'R'
-
-    # Determine pawn positions
     
     def check_pawns_in_file(color, checking_pos):
         points = 0
@@ -174,7 +157,7 @@ def king_safety_eval(king_pos, method, bitboard):
         else:
             pawn_value = 1
             
-        for i in range(1, 3):
+        for i in range(1, 4):
             # break if top rank (avoid index error)
             if check_top_rank(color, checking_pos):
                 # set points to max and break
@@ -193,18 +176,36 @@ def king_safety_eval(king_pos, method, bitboard):
 
         return points
 
+    # ----- WHITE KING -----
+    
+    # check if king is on opposite top rank
+    if check_top_rank('w', white_king):
+        king_edge[0] = 'T'
+    # check for position 0 (edge case to prevent division by 0)
+    elif white_king == 0:
+        king_edge[0] = 'L'
+    # if king is at left edge
+    elif white_king % 8 == 0:
+        king_edge[0] = 'L'
+    # if king is at right edge
+    elif white_king % 8 == 7:
+        king_edge[0] = 'R'
+        
+    # Determine pawn positions
+
     # check king's file
     checking_pos = king_pos[0] - 8
     safety[0] += check_pawns_in_file('w', checking_pos)
     
     # check left and/or right file
-    if king_edge[0] != 'L':
+    if king_edge[0] != 'R':
         checking_pos = king_pos[0] - 7
         safety[0] += check_pawns_in_file('w', checking_pos)
-    if king_edge[0] != 'R':
+        
+    if king_edge[0] != 'L':
         checking_pos = king_pos[0] - 9
         safety[0] += check_pawns_in_file('w', checking_pos)
-
+        
 
     # ----- BLACK KING -----
     
@@ -228,31 +229,53 @@ def king_safety_eval(king_pos, method, bitboard):
     safety[1] += check_pawns_in_file('b', checking_pos)
     
     # check left and/or right file
-    if king_edge[1] != 'L':
+    if king_edge[1] != 'R':
         checking_pos = king_pos[1] + 9
         safety[1] += check_pawns_in_file('b', checking_pos)
-    if king_edge[1] != 'R':
+    if king_edge[1] != 'L':
         checking_pos = king_pos[1] + 7
         safety[1] += check_pawns_in_file('b', checking_pos)
 
     return safety
 
+def central_control_eval(board_pos):
+    """
+    Takes a position (as a python-chess board) and returns values for white and black central control
+    """
+    central_control = [0, 0]
+    
+    # 1 points for each piece in center
+    # 1 point for each piece attacking center
+    # center is e4, e5, d4, d5
+    print(board_pos.piece_at(chess.parse_square('e4')))
+    
+    # center squares
+    center_attacked = [chess.E4, chess.E5, chess.D4, chess.D5]
+    center_occupied = [chess.parse_square('e4'), chess.parse_square('e5'), chess.parse_square('d4'), chess.parse_square('d5')]
+    
+    # check attacked squares
+    for square in center_attacked:
+        if(board_pos.is_attacked_by(chess.WHITE, square)):
+            central_control[0] += 1
+        elif(board_pos.is_attacked_by(chess.BLACK, square)):
+            central_control[1] += 1
+            
+    # check occupied squares
+    for square in center_occupied:
+        if(board_pos.piece_at(square).isupper()):
+            central_control[0] += 1
+        elif(board_pos.piece_at(square).islower()):
+            central_control[1] += 1
+        
+
 
 # Testing
 
-# pgn = open("./data/test_games")
-# first_game = chess.pgn.read_game(pgn)
+pgn = open("./data/test_games")
+first_game = chess.pgn.read_game(pgn)
 
-# board_fen = get_random_pos(first_game)
-
-# bitboard = convert_to_bitboard(board_fen)
-    
-# king_pos = find_kings(bitboard)
-# king_safety = king_safety_eval(king_pos, "standard", bitboard)
-# print(king_safety)
-
-# board = chess.Board(board_fen)
-# print(board)
+board_pos = first_game.board()
+central_control_eval(board_pos)
 
 # PAWN POINTS
 # All 3 infront of king = 1
