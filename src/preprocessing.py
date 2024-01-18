@@ -4,6 +4,7 @@ import random
 import copy
 import re
 import numpy as np
+import pandas as pd
 
 def find_number_moves(moves):
     """
@@ -15,26 +16,42 @@ def find_number_moves(moves):
     
     return int(re.findall(" (\d+)\.", moves)[-1])
 
-def get_random_pos(game):
+def get_random_pos(game, move_number=-1):
     """
     Gets a random board position in a given game
 
     :param game: game to find position in
+    :param move_number: move number to return position of
     :return: random board position
     """
     board = game.board()
     
     num_moves = find_number_moves(str(game.mainline_moves()))
     
-    rand = random.randrange(1, num_moves)
-    count = 0
+    # Check move number is valid for given game
+    if move_number > num_moves or move_number < -1:
+        return "Move number out of range"
+    
+    # If move number is -1 then do random
+    if(move_number == -1):
+        rand = random.randrange(1, (2*num_moves))
+        count = 0
 
-    for move in game.mainline_moves():
-        board.push(move)
-        count += 1
-        if count == rand:
-            break;
-
+        for move in game.mainline_moves():
+            board.push(move)
+            count += 1
+            if count == rand:
+                break
+            
+    else:
+        rand = random.randrange(((2*move_number) - 2), ((2*move_number) - 1))
+        count = 0
+        for move in game.mainline_moves():
+            board.push(move)
+            count += 1
+            if count == rand:
+                break
+    
     return board.fen()
 
 def convert_to_bitboard(fen):
@@ -242,40 +259,54 @@ def central_control_eval(board_pos):
     """
     Takes a position (as a python-chess board) and returns values for white and black central control
     """
+    
+    # default center control
     central_control = [0, 0]
     
     # 1 points for each piece in center
     # 1 point for each piece attacking center
     # center is e4, e5, d4, d5
-    print(board_pos.piece_at(chess.parse_square('e4')))
-    
+        
     # center squares
-    center_attacked = [chess.E4, chess.E5, chess.D4, chess.D5]
-    center_occupied = [chess.parse_square('e4'), chess.parse_square('e5'), chess.parse_square('d4'), chess.parse_square('d5')]
+    conversion = {
+        chess.E4: "e4",
+        chess.E5: "e5",
+        chess.D4: "d4",
+        chess.D5: "d5",
+    }
     
-    # check attacked squares
+    center_attacked = [chess.E4, chess.E5, chess.D4, chess.D5]
+        
     for square in center_attacked:
+        
+        # check attacked squares
         if(board_pos.is_attacked_by(chess.WHITE, square)):
             central_control[0] += 1
-        elif(board_pos.is_attacked_by(chess.BLACK, square)):
+        if(board_pos.is_attacked_by(chess.BLACK, square)):
             central_control[1] += 1
             
-    # check occupied squares
-    for square in center_occupied:
-        if(board_pos.piece_at(square).isupper()):
+        # check occupied squares
+        if(str(board_pos.piece_at(chess.parse_square(conversion[square]))).isupper()):
             central_control[0] += 1
-        elif(board_pos.piece_at(square).islower()):
+        elif(str(board_pos.piece_at(chess.parse_square(conversion[square]))).islower()):
             central_control[1] += 1
         
+    return central_control
 
+def create_model_input(bitboard, king_safety, central_control, player_ratings):
+    """
+    Takes the bitboard, king safety, central control and rating to create an input for a machine learning model
+    """
+    
+    
+    pass
 
 # Testing
-
-pgn = open("./data/test_games")
-first_game = chess.pgn.read_game(pgn)
-
-board_pos = first_game.board()
-central_control_eval(board_pos)
+# pgn = open("./data/test_games")
+# first_game = chess.pgn.read_game(pgn)
+# print(first_game)
+# board_pos = first_game.board()
+# central_control_eval(board_pos)
 
 # PAWN POINTS
 # All 3 infront of king = 1

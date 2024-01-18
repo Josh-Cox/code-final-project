@@ -24,6 +24,13 @@ class TestPreprocessing(unittest.TestCase):
         
         # Different positions to test central control
         self.test_central_control_one = chess.Board('knb2b1r/ppp3pp/3p4/4ppQ1/2qNP1n1/3P4/PPP2P1P/RNB2B1K w - - 0 1')
+        
+        # Test the machine learning model input
+        self.test_model_input_bitboard = convert_to_bitboard(self.test_fen)
+        self.test_model_input_king_safety = np.array([4, 1])
+        self.test_model_input_central_control = np.array([4, 5])
+        self.test_white_elo = 1961
+        self.test_black_elo = 1618
 
     def test_find_number_moves(self):
         """
@@ -41,6 +48,9 @@ class TestPreprocessing(unittest.TestCase):
         # Check this is within bounds
         self.assertTrue(test_rand_pos <= 30, "Random position is above number of moves")
         self.assertTrue(test_rand_pos >= 0, "Random position is below 0")
+        
+        # Test getting specific move number
+        self.assertIn(get_random_pos(self.test_game, 20), ['3r4/pnppkp2/1p2p1r1/6p1/3P4/N1P5/PPQB1PP1/R3K3 w Q - 0 20', '3r4/pnppkp2/1p2p1r1/6p1/3P4/N1P5/PPQB1PP1/R3K3 b Q - 1 20'])
         
     def test_convert_to_bitboard(self):
         """
@@ -95,9 +105,17 @@ class TestPreprocessing(unittest.TestCase):
         """
         Tests funciton that takes a board position and returns a value for central control for each color
         """
-        central_control_eval(self.test_central_control_one)
-        # white = 3
-        # black = 3
+        np.testing.assert_allclose(central_control_eval(self.test_central_control_one), np.array([4, 5]), rtol=0, atol=0, err_msg="Central control is incorrect")
+        
+        
+    def test_create_model_inputs(self):
+        """
+        Tests function that returns an input for a machine learning model
+        """
+        
+        # correct_input = pd.DataFrame(self.test_model_input_bitboard, self.test_model_input_king_safety,
+                    #  self.test_model_input_central_control)
+        
         
         
 
