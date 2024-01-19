@@ -50,7 +50,7 @@ class TestPreprocessing(unittest.TestCase):
         self.assertTrue(test_rand_pos >= 0, "Random position is below 0")
         
         # Test getting specific move number
-        self.assertIn(get_random_pos(self.test_game, 20), ['3r4/pnppkp2/1p2p1r1/6p1/3P4/N1P5/PPQB1PP1/R3K3 w Q - 0 20', '3r4/pnppkp2/1p2p1r1/6p1/3P4/N1P5/PPQB1PP1/R3K3 b Q - 1 20'])
+        self.assertIn(get_random_pos(self.test_game, 20), ['3r4/pnppkp2/1p2p1r1/6p1/3P4/N1P5/PPQB1PP1/R3K3 w Q - 0 20', '3r4/pnppkp2/1p2p1r1/6p1/3P4/N1P5/PPQB1PP1/2KR4 b - - 1 20'], "Position returned is incorrect")
         
     def test_convert_to_bitboard(self):
         """
@@ -112,12 +112,44 @@ class TestPreprocessing(unittest.TestCase):
         """
         Tests function that returns an input for a machine learning model
         """
+    
+        # test input for the function
+        test_input = create_model_input(self.test_game, 20)
+                
+        # two correct bitboards (white or black's turn)
+        correct_bitboards = [np.array([ 0,  0,  0,  2,  0,  0,  0,  0,  1,  3,  1,  1,  6,  1,  0,  0,  0,
+        1,  0,  0,  1,  0,  2,  0,  0,  0,  0,  0,  0,  0,  1,  0,  0,  0,
+        0,  7,  0,  0,  0,  0,  9,  0,  7,  0,  0,  0,  0,  0,  7,  7, 11,
+       10,  0,  7,  7,  0,  8,  0,  0,  0, 12,  0,  0,  0]),
+        np.array([ 0,  0,  0,  2,  0,  0,  0,  0,  1,  3,  1,  1,  6,  1,  0,  0,  0,
+        1,  0,  0,  1,  0,  2,  0,  0,  0,  0,  0,  0,  0,  1,  0,  0,  0,
+        0,  7,  0,  0,  0,  0,  9,  0,  7,  0,  0,  0,  0,  0,  7,  7, 11,
+       10,  0,  7,  7,  0,  0,  0, 12,  8,  0,  0,  0,  0])]
+                        
+        # check bitboards        
+        self.assertTrue(
+            np.array_equal(test_input[0], correct_bitboards[0]) or
+            np.array_equal(test_input[0], correct_bitboards[1]))
         
-        # correct_input = pd.DataFrame(self.test_model_input_bitboard, self.test_model_input_king_safety,
-                    #  self.test_model_input_central_control)
+        print(test_input[2])
         
+        # check king safety
+        self.assertTrue((np.array_equal(test_input[1], 4)) or (np.array_equal(test_input[1], 7)) and
+            (np.array_equal(test_input[2], 6) or np.array_equal(test_input[2], 7))
+                        
+        ) 
         
+        # check central control
+        # self.assertTrue(
+        #     np.array_equal(test_input[2], np.array([4, 1]))
+        # ) 
         
+        # # check ratings
+        # self.assertTrue(
+        #     np.array_equal(test_input[3], np.array(['1961', '1618']))
+        # ) 
+        
+                
 
 if __name__ == '__main__':
         unittest.main()

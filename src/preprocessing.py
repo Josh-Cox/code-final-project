@@ -16,13 +16,23 @@ def find_number_moves(moves):
     
     return int(re.findall(" (\d+)\.", moves)[-1])
 
+def get_player_ratings(game):
+    """
+    Returns the ratings of each player
+
+    :param game: The game to retrieve ratings from
+    :return: Player ratings
+    """
+    
+    return np.array([game.headers["WhiteElo"], game.headers["BlackElo"]])
+
 def get_random_pos(game, move_number=-1):
     """
     Gets a random board position in a given game
 
     :param game: game to find position in
     :param move_number: move number to return position of
-    :return: random board position
+    :return: random board position as FEN
     """
     board = game.board()
     
@@ -44,14 +54,14 @@ def get_random_pos(game, move_number=-1):
                 break
             
     else:
-        rand = random.randrange(((2*move_number) - 2), ((2*move_number) - 1))
+        rand = random.randrange(((2*move_number) - 2), ((2*move_number)))
         count = 0
         for move in game.mainline_moves():
             board.push(move)
             count += 1
             if count == rand:
                 break
-    
+            
     return board.fen()
 
 def convert_to_bitboard(fen):
@@ -155,9 +165,9 @@ def king_safety_eval(king_pos, method, bitboard):
     """
     Evaluates the safety of given king (cap of 3 pushes for each pawn)
 
-    :param color: which color's king to evaluate
     :param king_pos: position of king to evaluate
     :param method: method to use (standard or exponential)
+    :param bitboard: bitboard of position
     :return: value to represent evaluation of king safety
     
     """
@@ -253,11 +263,13 @@ def king_safety_eval(king_pos, method, bitboard):
         checking_pos = king_pos[1] + 7
         safety[1] += check_pawns_in_file('b', checking_pos)
 
-    return safety
+    return np.array(safety)
 
 def central_control_eval(board_pos):
     """
     Takes a position (as a python-chess board) and returns values for white and black central control
+    
+    :param board_pos: python-chess board position
     """
     
     # default center control
@@ -291,24 +303,45 @@ def central_control_eval(board_pos):
         elif(str(board_pos.piece_at(chess.parse_square(conversion[square]))).islower()):
             central_control[1] += 1
         
-    return central_control
+    return np.array(central_control)
 
-def create_model_input(bitboard, king_safety, central_control, player_ratings):
+def create_model_input(game, testing_move_number=-1):
     """
-    Takes the bitboard, king safety, central control and rating to create an input for a machine learning model
+    Takes the game and creates an input for a machine learning model
+    
+    :param game: Game to create input from
     """
     
+    # get board position 20
+    board_pos = get_random_pos(game, testing_move_number)
+
+    # convert to bitboard
+    bitboard = convert_to_bitboard(board_pos)
+
+    # get king safety and central control values
+    king_pos = find_kings(bitboard)
+    king_safety = king_safety_eval(king_pos, "standard", bitboard)
+    central_control = central_control_eval(chess.Board(board_pos))
+
+    # get player ratings
+    player_ratings = get_player_ratings(game)
+
+    data = [bitboard, king_safety[0], king_safety[1], central_control[0], central_control[1], player_ratings[0], player_ratings[1]]
     
-    pass
+    return data
 
-# Testing
-# pgn = open("./data/test_games")
-# first_game = chess.pgn.read_game(pgn)
-# print(first_game)
-# board_pos = first_game.board()
-# central_control_eval(board_pos)
+def main():
+    
+    # access games database
+    pgn = open("./data/test_games")
 
-# PAWN POINTS
-# All 3 infront of king = 1
-# Exponential will be + amount of squares pushed
-# Standard will be + 1 for each square pushed
+    # create list of inputs
+    inputs = [create_model_input(chess.pgn.read_game(pgn)) for i in range(0, 3)]
+    
+    
+    # convert to dataframe
+    df = pd.DataFrame(inputs)
+    print(df)
+    
+if __name__ == "__main__":
+    main()
