@@ -101,6 +101,13 @@ class TestPreprocessing(unittest.TestCase):
         np.testing.assert_allclose(king_safety_eval(np.array([63, 0]), "standard", self.test_right_edge_king_safety), np.array([4, 1]), rtol=0, atol=0, err_msg="King safety evaluation incorrect")
         np.testing.assert_allclose(king_safety_eval(np.array([56, 7]), "standard", self.test_left_edge_king_safety), np.array([2, 3]), rtol=0, atol=0, err_msg="King safety evaluation incorrect")
         
+        # Checking Exponential
+        np.testing.assert_allclose(king_safety_eval(np.array([60, 4]), "exponential", self.test_good_king_safey), np.array([2, 1]), rtol=0, atol=0, err_msg="King safety evaluation incorrect")
+        np.testing.assert_allclose(king_safety_eval(np.array([60, 4]), "exponential", self.test_bad_king_safey), np.array([5, 8]), rtol=0, atol=0, err_msg="King safety evaluation incorrect")
+        np.testing.assert_allclose(king_safety_eval(np.array([63, 0]), "exponential", self.test_right_edge_king_safety), np.array([7, 1]), rtol=0, atol=0, err_msg="King safety evaluation incorrect")
+        np.testing.assert_allclose(king_safety_eval(np.array([56, 7]), "exponential", self.test_left_edge_king_safety), np.array([2, 3]), rtol=0, atol=0, err_msg="King safety evaluation incorrect")
+
+        
     def test_central_control_eval(self):
         """
         Tests funciton that takes a board position and returns a value for central control for each color
@@ -114,7 +121,7 @@ class TestPreprocessing(unittest.TestCase):
         """
     
         # test input for the function
-        test_input = create_model_input(self.test_game, 20)
+        test_input = create_model_input(self.test_game, "standard", 20)
                 
         # two correct bitboards (white or black's turn)
         correct_bitboards = [np.array([ 0,  0,  0,  2,  0,  0,  0,  0,  1,  3,  1,  1,  6,  1,  0,  0,  0,
@@ -131,23 +138,23 @@ class TestPreprocessing(unittest.TestCase):
             np.array_equal(test_input[0], correct_bitboards[0]) or
             np.array_equal(test_input[0], correct_bitboards[1]))
         
-        print(test_input[2])
         
         # check king safety
-        self.assertTrue((np.array_equal(test_input[1], 4)) or (np.array_equal(test_input[1], 7)) and
+        self.assertTrue((np.array_equal(test_input[1], 4)) or (np.array_equal(test_input[1], 6)) and
             (np.array_equal(test_input[2], 6) or np.array_equal(test_input[2], 7))
                         
         ) 
         
         # check central control
-        # self.assertTrue(
-        #     np.array_equal(test_input[2], np.array([4, 1]))
-        # ) 
+        self.assertEqual(test_input[3], 4)
+        self.assertEqual(test_input[4], 1)
         
-        # # check ratings
-        # self.assertTrue(
-        #     np.array_equal(test_input[3], np.array(['1961', '1618']))
-        # ) 
+        # check ratings      
+        self.assertEqual(test_input[5], '1961')
+        self.assertEqual(test_input[6], '1618')
+        
+        # check turn
+        self.assertTrue(test_input[7] == 'w' or test_input[7] == 'b')
         
                 
 

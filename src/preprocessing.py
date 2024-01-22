@@ -6,6 +6,13 @@ import re
 import numpy as np
 import pandas as pd
 
+def addition_factorial(num):
+    """
+    Returns the addition factorial of a given number (e.g. 1+2+3 rather than 1*2*3)
+    """
+    
+    return int(((num*num) + num) / 2)
+
 def find_number_moves(moves):
     """
     Finds the number of moves in a given game
@@ -171,97 +178,125 @@ def king_safety_eval(king_pos, method, bitboard):
     :return: value to represent evaluation of king safety
     
     """
-    safety = [1, 1] # higher = worse safety
-    king_edge = ['N', 'N'] #(N for none, L for left, R for right, T for top)
-    white_king = king_pos[0]
-    black_king = king_pos[1]
+    
+    def check_king_edges(king_pos, color):
+        """
+        Checks if given king is at an edge of the board
+
+        :param king_pos: position of king on bitboard
+        :param color: color of king
+        """
+        
+        # check if king is on opposite top rank
+        if check_top_rank(color, king_pos):
+            return 'T'
+        # check for position 0 (edge case to prevent division by 0)
+        elif king_pos == 0:
+            return 'L'
+        # if king is at left edge
+        elif king_pos % 8 == 0:
+            return 'L'
+        # if king is at right edge
+        elif king_pos % 8 == 7:
+            return 'R'
+        else:
+            return 'N'
     
     def check_pawns_in_file(color, checking_pos):
+        """
+        Check given file for a friendly pawn
+
+        :param color: color pawn to check for
+        :param checking_pos: starting position to check for pawn (moves up the file from this position)
+        """
+        
+        # initialize points
         points = 0
         
+        # set value for respective pawn color
         if color == 'w':
             pawn_value = 7
         else:
             pawn_value = 1
-            
+        
+        # loop 3 times (max safety rating is 3 for standard)
         for i in range(1, 4):
             # break if top rank (avoid index error)
             if check_top_rank(color, checking_pos):
                 # set points to max and break
-                points = 3
-                break;
+                if method == "standard":
+                    points = 3
+                else:
+                    points = addition_factorial(3)
+                break
+            
             # check if next square has friendly pawn
             if bitboard[checking_pos] == pawn_value:
                 return points
             else:
+                # move up the file
                 if color == 'w':
                     checking_pos -= 8
                 else:
                     checking_pos += 8
                     
-                points = i
+                # check method
+                if method == "standard":
+                    points = i
+                else:
+                    points = addition_factorial(i)
 
         return points
 
-    # ----- WHITE KING -----
-    
-    # check if king is on opposite top rank
-    if check_top_rank('w', white_king):
-        king_edge[0] = 'T'
-    # check for position 0 (edge case to prevent division by 0)
-    elif white_king == 0:
-        king_edge[0] = 'L'
-    # if king is at left edge
-    elif white_king % 8 == 0:
-        king_edge[0] = 'L'
-    # if king is at right edge
-    elif white_king % 8 == 7:
-        king_edge[0] = 'R'
+
         
     # Determine pawn positions
-
-    # check king's file
-    checking_pos = king_pos[0] - 8
-    safety[0] += check_pawns_in_file('w', checking_pos)
-    
-    # check left and/or right file
-    if king_edge[0] != 'R':
-        checking_pos = king_pos[0] - 7
-        safety[0] += check_pawns_in_file('w', checking_pos)
+    def check_files(color, king_edge, king_pos):
+        """
+        Checks appropriate files for pawns
         
-    if king_edge[0] != 'L':
-        checking_pos = king_pos[0] - 9
-        safety[0] += check_pawns_in_file('w', checking_pos)
+        :param color: color pawns to check for
+        """
         
+        # initialize safety
+        safety = 1
+        
+        # if color is white
+        if color == 'w':
+                 
+            # check king's file
+            checking_pos = king_pos[0] - 8
+            
+            # check method
+            safety += check_pawns_in_file('w', checking_pos)
+            
+            # check left and/or right file
+            if king_edge[0] != 'R':
+                checking_pos = king_pos[0] - 7
+                safety += check_pawns_in_file('w', checking_pos)
+                
+            if king_edge[0] != 'L':
+                checking_pos = king_pos[0] - 9
+                safety += check_pawns_in_file('w', checking_pos)
+        else:
+            
+            # check king's file
+            checking_pos = king_pos[1] + 8
+            safety += check_pawns_in_file('b', checking_pos)
+            
+            # check left and/or right file
+            if king_edge[1] != 'R':
+                checking_pos = king_pos[1] + 9
+                safety += check_pawns_in_file('b', checking_pos)
+            if king_edge[1] != 'L':
+                checking_pos = king_pos[1] + 7
+                safety += check_pawns_in_file('b', checking_pos)
+                
+        return safety
+                
 
-    # ----- BLACK KING -----
-    
-    # check if king is on opposite top rank
-    if check_top_rank('b', black_king):
-        # max king safety points
-        king_edge[1] = 'T'
-    # check for position 0 (edge case to prevent division by 0)
-    elif black_king == 0:
-        king_edge[1] = 'L'
-    # if king is at left edge
-    elif black_king % 8 == 0:
-        king_edge[1] = 'L'
-    # if king is at right edge
-    elif black_king % 8 == 7:
-        king_edge[1] = 'R'
-
-
-    # check king's file
-    checking_pos = king_pos[1] + 8
-    safety[1] += check_pawns_in_file('b', checking_pos)
-    
-    # check left and/or right file
-    if king_edge[1] != 'R':
-        checking_pos = king_pos[1] + 9
-        safety[1] += check_pawns_in_file('b', checking_pos)
-    if king_edge[1] != 'L':
-        checking_pos = king_pos[1] + 7
-        safety[1] += check_pawns_in_file('b', checking_pos)
+    king_edge = [check_king_edges(king_pos[0], 'w'), check_king_edges(king_pos[1], 'b')]
+    safety = [check_files('w', king_edge, king_pos), check_files('b', king_edge, king_pos)]
 
     return np.array(safety)
 
@@ -305,14 +340,16 @@ def central_control_eval(board_pos):
         
     return np.array(central_control)
 
-def create_model_input(game, testing_move_number=-1):
+def create_model_input(game, method, testing_move_number=-1):
     """
     Takes the game and creates an input for a machine learning model
     
     :param game: Game to create input from
+    :param method: method for king safety evaluation (standard or exponential)
+    :param testing_move_number: used for choosing a specific position instead of random (-1 is random pos)
     """
     
-    # get board position 20
+    # get board position
     board_pos = get_random_pos(game, testing_move_number)
 
     # convert to bitboard
@@ -320,27 +357,34 @@ def create_model_input(game, testing_move_number=-1):
 
     # get king safety and central control values
     king_pos = find_kings(bitboard)
-    king_safety = king_safety_eval(king_pos, "standard", bitboard)
+    king_safety = king_safety_eval(king_pos, method, bitboard)
     central_control = central_control_eval(chess.Board(board_pos))
 
     # get player ratings
     player_ratings = get_player_ratings(game)
+    
+    # get turn color
+    turn = find_turn(board_pos)
 
-    data = [bitboard, king_safety[0], king_safety[1], central_control[0], central_control[1], player_ratings[0], player_ratings[1]]
+    data = [bitboard, king_safety[0], king_safety[1], central_control[0], central_control[1], player_ratings[0], player_ratings[1], turn]
     
     return data
 
 def main():
+    """
+    Main function that runs the preprocessing on the chess games database
+    """
     
-    # access games database
+    # access games database8
     pgn = open("./data/test_games")
 
     # create list of inputs
-    inputs = [create_model_input(chess.pgn.read_game(pgn)) for i in range(0, 3)]
+    inputs = [create_model_input(chess.pgn.read_game(pgn), "exp") for i in range(0, 3)]
     
+    columns = ["bitboard", "w_safety", "b_safety", "w_central", "b_central", "w_rating", "b_rating", "turn"]
     
     # convert to dataframe
-    df = pd.DataFrame(inputs)
+    df = pd.DataFrame(inputs, columns=columns)
     print(df)
     
 if __name__ == "__main__":
