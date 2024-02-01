@@ -69,7 +69,9 @@ def get_random_pos(game, move_number=-1):
             if count == rand:
                 break
             
-    return board.fen()
+    next_move = board.pop()
+            
+    return [board.fen(), next_move]
 
 def convert_to_bitboard(fen):
     """
@@ -133,11 +135,11 @@ def find_turn(fen):
     """
 
     # set to black
-    turn = 'b'
+    turn = 1
 
     # if white then set to white
     if 'w' in fen:
-        turn = 'w'
+        turn = 0
 
     return turn
     
@@ -340,6 +342,37 @@ def central_control_eval(board_pos):
         
     return np.array(central_control)
 
+def encode_move(move, method="std"):
+    if method == "hash":
+        return hash(move)
+    else:
+        mapping_dict = {
+            'a': '1',
+            'b': '2',
+            'c': '3',
+            'd': '4',
+            'e': '5',
+            'f': '6',
+            'g': '7',
+            'h': '8',
+            'r': '1',
+            'n': '2',
+            'b': '3',
+            'q': '4',
+        }
+        
+        move = [*str(move)]
+        for index, char in enumerate(move):
+            if char.isalpha():
+                move[index] = mapping_dict[char]
+            
+        move = ''.join(move)
+        return int(move)
+        
+def test(game):
+    for move in game.mainline_moves():
+        print(encode_move(move), "\n")
+
 def create_model_input(game, method, testing_move_number=-1):
     """
     Takes the game and creates an input for a machine learning model
@@ -349,8 +382,10 @@ def create_model_input(game, method, testing_move_number=-1):
     :param testing_move_number: used for choosing a specific position instead of random (-1 is random pos)
     """
     
-    # get board position
-    board_pos = get_random_pos(game, testing_move_number)
+    # get board position and next move
+    temp = get_random_pos(game, testing_move_number)
+    board_pos = temp[0]
+    next_move = temp[1]
 
     # convert to bitboard
     bitboard = convert_to_bitboard(board_pos)
@@ -365,8 +400,11 @@ def create_model_input(game, method, testing_move_number=-1):
     
     # get turn color
     turn = find_turn(board_pos)
+    
+    # encode next move
+    next_move = encode_move(next_move, "std")
 
-    data = [bitboard, king_safety[0], king_safety[1], central_control[0], central_control[1], player_ratings[0], player_ratings[1], turn]
+    data = [bitboard, king_safety[0], king_safety[1], central_control[0], central_control[1], player_ratings[0], player_ratings[1], turn, next_move]
     
     return data
 
@@ -377,13 +415,13 @@ def main():
     
     # access games database8
     pgn = open("./data/test_games")
-
+    
     # create list of inputs
     inputs = [create_model_input(chess.pgn.read_game(pgn), "exp") for i in range(0, 3)]
     
-    columns = ["bitboard", "w_safety", "b_safety", "w_central", "b_central", "w_rating", "b_rating", "turn"]
+    columns = ["bitboard", "w_safety", "b_safety", "w_central", "b_central", "w_rating", "b_rating", "turn", "next_move"]
     
-    # convert to dataframe
+    # # convert to dataframe
     df = pd.DataFrame(inputs, columns=columns)
     print(df)
     
