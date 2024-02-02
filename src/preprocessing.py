@@ -6,6 +6,7 @@ import re
 import numpy as np
 import pandas as pd
 
+
 def addition_factorial(num):
     """
     Returns the addition factorial of a given number (e.g. 1+2+3 rather than 1*2*3)
@@ -408,7 +409,7 @@ def create_model_input(game, method, testing_move_number=-1):
     
     return data
 
-def main():
+def generate_df():
     """
     Main function that runs the preprocessing on the chess games database
     """
@@ -423,7 +424,7 @@ def main():
     
     # # convert to dataframe
     df = pd.DataFrame(inputs, columns=columns)
-    print(df)
+    return df
     
 if __name__ == "__main__":
-    main()
+    generate_df()
