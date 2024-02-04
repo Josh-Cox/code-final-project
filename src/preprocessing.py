@@ -404,6 +404,9 @@ def create_model_input(game, method, testing_move_number=-1):
     
     # encode next move
     next_move = encode_move(next_move, "std")
+    
+    # change bitboard from list to string
+    # bitboard = "".join([str(i) for i in bitboard])
 
     data = [bitboard, king_safety[0], king_safety[1], central_control[0], central_control[1], player_ratings[0], player_ratings[1], turn, next_move]
     
@@ -415,15 +418,23 @@ def generate_df():
     """
     
     # access games database8
-    pgn = open("./data/test_games")
+    pgn = open("../data/test_games")
     
     # create list of inputs
     inputs = [create_model_input(chess.pgn.read_game(pgn), "exp") for i in range(0, 3)]
     
     columns = ["bitboard", "w_safety", "b_safety", "w_central", "b_central", "w_rating", "b_rating", "turn", "next_move"]
     
-    # # convert to dataframe
+    # convert to dataframe
     df = pd.DataFrame(inputs, columns=columns)
+    
+    # Convert bitboard to its own columns for input into model
+    for i in range(64):
+        df[f'piece_{i}'] = df['bitboard'].apply(lambda x: x[i])
+        
+    # drop bitboard columns
+    df.drop(columns=['bitboard'], inplace=True)
+    
     return df
     
 if __name__ == "__main__":
