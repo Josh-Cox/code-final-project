@@ -1,2 +1,4 @@
 /data
 /venv
+/src/games.csv
+/src/gb.joblib

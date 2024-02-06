@@ -21,8 +21,10 @@ def find_number_moves(moves):
     :param moves: pgn of moves for a game
     :return: number of moves in the game as an integer
     """
+    if moves == "" or moves == None:
+        return 0
     
-    return int(re.findall(" (\d+)\.", moves)[-1])
+    return int(re.findall(r'(\d+)\.', moves)[-1])
 
 def get_player_ratings(game):
     """
@@ -45,6 +47,8 @@ def get_random_pos(game, move_number=-1):
     board = game.board()
     
     num_moves = find_number_moves(str(game.mainline_moves()))
+    if num_moves <= 0:
+        return None
     
     # Check move number is valid for given game
     if move_number > num_moves or move_number < -1:
@@ -369,7 +373,10 @@ def encode_move(move, method="std"):
             
         move = ''.join(move)
         return int(move)
-        
+
+def get_legal_moves(position):
+    return [position.san(move) for move in position.legal_moves]
+
 def test(game):
     for move in game.mainline_moves():
         print(encode_move(move), "\n")
@@ -385,8 +392,15 @@ def create_model_input(game, method, testing_move_number=-1):
     
     # get board position and next move
     temp = get_random_pos(game, testing_move_number)
+    
+    if temp == None:
+        return None
+    
     board_pos = temp[0]
     next_move = temp[1]
+    
+    # get set of legal moves for position
+    legal_moves = get_legal_moves(chess.Board(board_pos))
 
     # convert to bitboard
     bitboard = convert_to_bitboard(board_pos)
@@ -408,29 +422,37 @@ def create_model_input(game, method, testing_move_number=-1):
     # change bitboard from list to string
     # bitboard = "".join([str(i) for i in bitboard])
 
-    data = [bitboard, king_safety[0], king_safety[1], central_control[0], central_control[1], player_ratings[0], player_ratings[1], turn, next_move]
+    data = [bitboard, legal_moves, king_safety[0], king_safety[1], central_control[0], central_control[1], player_ratings[0], player_ratings[1], turn, next_move]
     
     return data
 
-def generate_df():
+def generate_df(dbpath):
     """
     Main function that runs the preprocessing on the chess games database
+    
+    :param dbpath: path to the database of chess games
     """
     
     # access games database8
-    pgn = open("../data/test_games")
+    pgn = open(dbpath)
     
     # create list of inputs
-    inputs = [create_model_input(chess.pgn.read_game(pgn), "exp") for i in range(0, 3)]
+    inputs = []
+    for i in range(0, 100):
+        singleInput = create_model_input(chess.pgn.read_game(pgn), "exp")
+        if singleInput != None:
+            inputs.append(singleInput)
+        
+    # inputs = [create_model_input(chess.pgn.read_game(pgn), "exp") for i in range(0, 100)]
     
-    columns = ["bitboard", "w_safety", "b_safety", "w_central", "b_central", "w_rating", "b_rating", "turn", "next_move"]
+    columns = ["bitboard", "legal_moves", "w_safety", "b_safety", "w_central", "b_central", "w_rating", "b_rating", "turn", "next_move"]
     
     # convert to dataframe
     df = pd.DataFrame(inputs, columns=columns)
     
     # Convert bitboard to its own columns for input into model
     for i in range(64):
-        df[f'piece_{i}'] = df['bitboard'].apply(lambda x: x[i])
+        df[f'square_{i}'] = df['bitboard'].apply(lambda x: x[i])
         
     # drop bitboard columns
     df.drop(columns=['bitboard'], inplace=True)
@@ -438,4 +460,4 @@ def generate_df():
     return df
     
 if __name__ == "__main__":
-    generate_df()
+    generate_df('../data/test_games')
