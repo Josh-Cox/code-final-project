@@ -347,11 +347,32 @@ def central_control_eval(board_pos):
         
     return np.array(central_control)
 
-def encode_move(move, method="std"):
-    if method == "hash":
-        return hash(move)
-    else:
-        mapping_dict = {
+def encode_moves_binary(moves):
+    # Identify unique characters across all moves
+    unique_chars = sorted(set(''.join(moves)))
+
+    # Create a mapping of characters to binary columns
+    char_to_column = {char: i for i, char in enumerate(unique_chars)}
+
+    # Initialize an empty DataFrame for the encoded moves with all columns set to 0
+    encoded_moves_df = pd.DataFrame(0, index=range(len(moves)), columns=unique_chars)
+
+    # Encode each move
+    for i, move in enumerate(moves):
+        for char in unique_chars:
+            if char in move:
+                encoded_moves_df.at[i, char] = 1
+
+    # Add columns for all possible letters [a, b, c, d, e, f, g, h] and numbers [1, 2, 3, 4, 5, 6, 7, 8]
+    for char in set('abcdefgh') | set('12345678'):
+        if char not in encoded_moves_df.columns:
+            encoded_moves_df[char] = 0
+
+    return encoded_moves_df
+
+
+def encode_move_std(move):
+    mapping_dict = {
             'a': '1',
             'b': '2',
             'c': '3',
@@ -366,22 +387,22 @@ def encode_move(move, method="std"):
             'q': '4',
         }
         
-        move = [*str(move)]
-        for index, char in enumerate(move):
-            if char.isalpha():
-                move[index] = mapping_dict[char]
-            
-        move = ''.join(move)
-        return int(move)
+    move = [*str(move)]
+    for index, char in enumerate(move):
+        if char.isalpha():
+            move[index] = mapping_dict[char]
+        
+    move = ''.join(move)
+    return str(move)
 
 def get_legal_moves(position):
     return [position.san(move) for move in position.legal_moves]
 
 def test(game):
     for move in game.mainline_moves():
-        print(encode_move(move), "\n")
+        print(encode_move_std(move), "\n")
 
-def create_model_input(game, method, testing_move_number=-1):
+def create_model_input(game, k_safety_method, testing_move_number=-1):
     """
     Takes the game and creates an input for a machine learning model
     
@@ -397,17 +418,14 @@ def create_model_input(game, method, testing_move_number=-1):
         return None
     
     board_pos = temp[0]
-    next_move = temp[1]
+    next_move = str(temp[1])
     
-    # get set of legal moves for position
-    legal_moves = get_legal_moves(chess.Board(board_pos))
-
     # convert to bitboard
     bitboard = convert_to_bitboard(board_pos)
 
     # get king safety and central control values
     king_pos = find_kings(bitboard)
-    king_safety = king_safety_eval(king_pos, method, bitboard)
+    king_safety = king_safety_eval(king_pos, k_safety_method, bitboard)
     central_control = central_control_eval(chess.Board(board_pos))
 
     # get player ratings
@@ -416,17 +434,14 @@ def create_model_input(game, method, testing_move_number=-1):
     # get turn color
     turn = find_turn(board_pos)
     
-    # encode next move
-    next_move = encode_move(next_move, "std")
-    
     # change bitboard from list to string
     # bitboard = "".join([str(i) for i in bitboard])
 
-    data = [bitboard, legal_moves, king_safety[0], king_safety[1], central_control[0], central_control[1], player_ratings[0], player_ratings[1], turn, next_move]
+    data = [board_pos, bitboard, king_safety[0], king_safety[1], central_control[0], central_control[1], player_ratings[0], player_ratings[1], turn, next_move]
     
     return data
 
-def generate_df(dbpath):
+def generate_df(dbpath, encode_method, k_safety_method):
     """
     Main function that runs the preprocessing on the chess games database
     
@@ -439,15 +454,14 @@ def generate_df(dbpath):
     # create list of inputs
     inputs = []
     for i in range(0, 100):
-        singleInput = create_model_input(chess.pgn.read_game(pgn), "exp")
+        singleInput = create_model_input(chess.pgn.read_game(pgn), k_safety_method)
         if singleInput != None:
             inputs.append(singleInput)
         
-    # inputs = [create_model_input(chess.pgn.read_game(pgn), "exp") for i in range(0, 100)]
     
-    columns = ["bitboard", "legal_moves", "w_safety", "b_safety", "w_central", "b_central", "w_rating", "b_rating", "turn", "next_move"]
+    columns = ["board_pos", "bitboard", "w_safety", "b_safety", "w_central", "b_central", "w_rating", "b_rating", "turn", "next_move"]
     
-    # convert to dataframe
+    # convert to dataframe    
     df = pd.DataFrame(inputs, columns=columns)
     
     # Convert bitboard to its own columns for input into model
@@ -457,7 +471,15 @@ def generate_df(dbpath):
     # drop bitboard columns
     df.drop(columns=['bitboard'], inplace=True)
     
+    # encode next_move column
+    if encode_method == "binary":
+        encoded_df = encode_moves_binary(df['next_move'].to_numpy())
+        df = pd.concat([df, encoded_df], axis=1)
+    else:
+        df['next_move_encoded'] = df['next_move'].apply(encode_move_std)
+
+    
     return df
     
 if __name__ == "__main__":
-    generate_df('../data/test_games')
+    generate_df('./data/test_games')
