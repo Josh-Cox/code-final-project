@@ -23,8 +23,8 @@ def train_models(df):
     """
     
     # create input and output features
-    X = df.drop(columns=['board_pos', 'next_move'])
-    y = df['next_move']
+    X = df.drop(columns=['board_pos', 'next_move_encoded'])
+    y = df['next_move_encoded']
     
     # split into test and train data
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
@@ -55,6 +55,26 @@ def make_predictions(boards):
     # load trained model from file
     model = load('./data/gb.joblib')
     
+    # extract features from test data
+    feature_names = X_test.columns
+    
+    # feature importance
+    feature_importances = model.feature_importances_
+    
+    # df of features and their importance
+    feature_importance_df = pd.DataFrame({'Feature': feature_names, 'Importance': feature_importances})
+    
+    # sort the df by importance
+    feature_importance_df.sort_values(by='Importance', ascending=False)
+    
+    # plot the importance
+    plt.figure(figsize=(10, 6))
+    plt.barh(feature_importance_df['Feature'], feature_importance_df['Importance'])
+    plt.xlabel('Importance')
+    plt.ylabel('Feature')
+    plt.title('Feature Importance')
+    plt.show()
+    
     # TODO -- Currently only predicting one position -> Loop through all positions and save predicitons for each
     
     # transform test data and board position
@@ -84,7 +104,6 @@ def make_predictions(boards):
     else:
         best_move, _ = max(filtered_preds, key=lambda x: x[1])
         print(f"Model predicted: {best_move}")
-    
     
 def check_if_legal(board, move, method="std"):
     """
@@ -137,7 +156,6 @@ def check_if_legal(board, move, method="std"):
         # return True if move is in set of legal moves, else return False
         return move in board.legal_moves
          
-         
 def preprocess_data(filename):
     """
     Preprocess the dataframe and save to csv file
@@ -152,23 +170,21 @@ def preprocess_data(filename):
     # save to csv file
     df.to_csv('./data/games.csv', index=False)
     
-
 def main():
-    # preprocess the dataframe
-    preprocess_data('test_games')
+    # # preprocess the dataframe
+    preprocess_data('lichess-2023-11')
     
     # grab df from games.csv
     df = pd.read_csv('./data/games.csv')
-    print(df)
     
-    # train the models    
-    # train_models(df)
+    # # train the models    
+    train_models(df)
     
     # grab board positions (for checking legal move)
-    # boards = df['board_pos']
+    boards = df['board_pos']
     
     # make predictions
-    # make_predictions(boards)
+    make_predictions(boards)
 
     
 if __name__ == '__main__':

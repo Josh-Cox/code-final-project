@@ -441,7 +441,7 @@ def create_model_input(game, k_safety_method, testing_move_number=-1):
     
     return data
 
-def generate_df(dbpath, encode_method, k_safety_method):
+def generate_df(dbpath, k_safety_method, encode_method):
     """
     Main function that runs the preprocessing on the chess games database
     
@@ -468,8 +468,6 @@ def generate_df(dbpath, encode_method, k_safety_method):
     for i in range(64):
         df[f'square_{i}'] = df['bitboard'].apply(lambda x: x[i])
         
-    # drop bitboard columns
-    df.drop(columns=['bitboard'], inplace=True)
     
     # encode next_move column
     if encode_method == "binary":
@@ -477,6 +475,12 @@ def generate_df(dbpath, encode_method, k_safety_method):
         df = pd.concat([df, encoded_df], axis=1)
     else:
         df['next_move_encoded'] = df['next_move'].apply(encode_move_std)
+        
+    # drop bitboard column
+    df.drop(columns=['bitboard'], inplace=True)
+    
+    # drop next_move column
+    df.drop(columns=['next_move'], inplace=True)
 
     
     return df
