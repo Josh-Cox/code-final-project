@@ -347,28 +347,71 @@ def central_control_eval(board_pos):
         
     return np.array(central_control)
 
-def encode_moves_binary(moves):
-    # Identify unique characters across all moves
-    unique_chars = sorted(set(''.join(moves)))
-
-    # Create a mapping of characters to binary columns
-    char_to_column = {char: i for i, char in enumerate(unique_chars)}
-
-    # Initialize an empty DataFrame for the encoded moves with all columns set to 0
-    encoded_moves_df = pd.DataFrame(0, index=range(len(moves)), columns=unique_chars)
-
-    # Encode each move
-    for i, move in enumerate(moves):
-        for char in unique_chars:
-            if char in move:
-                encoded_moves_df.at[i, char] = 1
-
-    # Add columns for all possible letters [a, b, c, d, e, f, g, h] and numbers [1, 2, 3, 4, 5, 6, 7, 8]
-    for char in set('abcdefgh') | set('12345678'):
-        if char not in encoded_moves_df.columns:
-            encoded_moves_df[char] = 0
-
-    return encoded_moves_df
+def encode_moves_binary_vector(moves):
+    """
+    Encodes the "next_move" with binary start position and vector move
+    :param moves: list of moves in format E.g. "e4d5" or for promotion to queen "e4e8q"
+    """
+        
+    # data to create dataframe from
+    data = []
+    
+    # loop through every row of dataframe
+    for row in moves:
+        
+        # get the start and end square
+        start_square, end_square = row[:2], row[2:]
+        
+        # get start and end columns and ranks
+        start_column, start_rank = start_square[0], start_square[1]
+        end_column, end_rank = end_square[0], end_square[1]
+                
+        # calculate columns and ranks moved
+        columns_moved = ord(end_column) - ord(start_column)
+        ranks_moved = ord(end_rank) - ord(start_rank)
+        
+        # blank row entry
+        blank_list = [0] * 22
+        
+        # set needed start position indexes to 1
+        blank_list[ord(start_column) - 88] = 1
+        blank_list[int(start_rank)] = 1
+        
+        # columns and ranks moved
+        blank_list[16] = columns_moved
+        blank_list[17] = ranks_moved
+        
+        
+        # if there is a promotion
+        if len(row) > 4:
+            promotion_index = 21
+        # determine the correct column based on piece
+            match (row[4]):
+                case 'q':
+                    promotion_index = 18
+                    break
+                case 'r':
+                    promotion_index = 19
+                    break
+                case 'b':
+                    promotion_index = 20
+                    break
+                case 'n':
+                    promotion_index = 21
+                    break
+                
+            # set correct promotion index to 1
+            blank_list[promotion_index] = 1    
+        
+        # append list to data
+        data.append(blank_list)
+        
+        
+    # create dataframe from data
+    encoded_df = pd.DataFrame(data, columns=['1', '2', '3', '4', '5', '6', '7', '8', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h',
+                                             'columns_moved', 'ranks_moved', 'promote_q', 'promote_r', 'promote_b', 'promote_n'])
+    
+    return encoded_df
 
 
 def encode_move_std(move):
@@ -446,6 +489,8 @@ def generate_df(dbpath, k_safety_method, encode_method):
     Main function that runs the preprocessing on the chess games database
     
     :param dbpath: path to the database of chess games
+    :param k_safety_method: method for evaluating king safety (standard or exponential)
+    :param encode-method: method for encoding next move (value, binary, binary + vector)
     """
     
     # access games database8
@@ -471,8 +516,9 @@ def generate_df(dbpath, k_safety_method, encode_method):
     
     # encode next_move column
     if encode_method == "binary":
-        encoded_df = encode_moves_binary(df['next_move'].to_numpy())
+        encoded_df = encode_moves_binary_vector(df['next_move'].to_numpy())
         df = pd.concat([df, encoded_df], axis=1)
+        print(df.iloc[:, -4:])
     else:
         df['next_move_encoded'] = df['next_move'].apply(encode_move_std)
         
@@ -486,4 +532,4 @@ def generate_df(dbpath, k_safety_method, encode_method):
     return df
     
 if __name__ == "__main__":
-    generate_df('./data/test_games')
+    generate_df('../data/lichess-2023-11', 'std', 'binary')

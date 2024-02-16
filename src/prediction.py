@@ -12,6 +12,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.metrics import precision_recall_fscore_support
 
+PATH_PREFIX = '../data/'
+
 
 # ----------------------------------------------------------------
     
@@ -36,10 +38,10 @@ def train_models(df):
     gb.fit(X_train, y_train)
     
     # save model to file
-    dump(gb, './data/gb.joblib')
+    dump(gb, PATH_PREFIX + 'gb.joblib')
     
     # save test data to csv
-    X_test.to_csv('./data/split_test_data.csv', index=False)
+    X_test.to_csv(PATH_PREFIX + 'split_test_data.csv', index=False)
     
 def make_predictions(boards):
     """
@@ -50,10 +52,10 @@ def make_predictions(boards):
     """
     
     # get test data from train_test_split
-    X_test = pd.read_csv('./data/split_test_data.csv')
+    X_test = pd.read_csv(PATH_PREFIX + 'split_test_data.csv')
     
     # load trained model from file
-    model = load('./data/gb.joblib')
+    model = load(PATH_PREFIX + 'gb.joblib')
     
     # extract features from test data
     feature_names = X_test.columns
@@ -66,14 +68,6 @@ def make_predictions(boards):
     
     # sort the df by importance
     feature_importance_df.sort_values(by='Importance', ascending=False)
-    
-    # plot the importance
-    plt.figure(figsize=(10, 6))
-    plt.barh(feature_importance_df['Feature'], feature_importance_df['Importance'])
-    plt.xlabel('Importance')
-    plt.ylabel('Feature')
-    plt.title('Feature Importance')
-    plt.show()
     
     # TODO -- Currently only predicting one position -> Loop through all positions and save predicitons for each
     
@@ -99,11 +93,19 @@ def make_predictions(boards):
     
     # print best prediction (if no legal predictions they choose random from legal moves list)
     if not filtered_preds:
-        fallback_move = random.choice(legal_moves)
-        print(f"Model couldn't provide a valid prediction. Using fallback move: {fallback_move}")
+        # fallback_move = random.choice(legal_moves)
+        print(f"Model couldn't provide a valid prediction")
     else:
         best_move, _ = max(filtered_preds, key=lambda x: x[1])
         print(f"Model predicted: {best_move}")
+        
+    # plot the importance
+    plt.figure(figsize=(10, 6))
+    plt.barh(feature_importance_df['Feature'], feature_importance_df['Importance'])
+    plt.xlabel('Importance')
+    plt.ylabel('Feature')
+    plt.title('Feature Importance')
+    plt.show()
     
 def check_if_legal(board, move, method="std"):
     """
@@ -117,9 +119,14 @@ def check_if_legal(board, move, method="std"):
     """
     
     # check encoding method used
-    if method == "hash":
-        pass
-    else:
+    if method == "std":
+        
+        # convert to string
+        move = str(move)
+
+        # check for null move E.g. c2c2
+        if move[0] == move[2] and move[1] == move[3]: return False
+
         # create hashmaps
         mapping_dict = {
             '1': 'a',
@@ -132,9 +139,7 @@ def check_if_legal(board, move, method="std"):
             '8': 'h',
         }
     
-        
-        # convert move to str and decode (only decoding 1st and 3rd chars as numbers aren't changed E.g. e5d7 == 5547)
-        move = str(move)
+        # decode (only decoding 1st and 3rd chars as numbers aren't changed E.g. e5d7 == 5547)
         new_str = mapping_dict[move[0]] + move[1] + mapping_dict[move[2]] + move[3]
         
         # if move includes a promotion
@@ -156,7 +161,7 @@ def check_if_legal(board, move, method="std"):
         # return True if move is in set of legal moves, else return False
         return move in board.legal_moves
          
-def preprocess_data(filename):
+def preprocess_data(filename, k_safety_method, encode_method):
     """
     Preprocess the dataframe and save to csv file
     
@@ -164,20 +169,20 @@ def preprocess_data(filename):
     """
     
     # get file path
-    path = "./data/" + filename
+    path = PATH_PREFIX + filename
     # generate dataframe from games
-    df = generate_df(path, "std", "std")
+    df = generate_df(path, k_safety_method, encode_method)
     # save to csv file
-    df.to_csv('./data/games.csv', index=False)
+    df.to_csv(PATH_PREFIX + 'games.csv', index=False)
     
 def main():
-    # # preprocess the dataframe
-    preprocess_data('lichess-2023-11')
+    # preprocess the dataframe
+    preprocess_data('lichess-2023-11', 'std', 'std')
     
     # grab df from games.csv
-    df = pd.read_csv('./data/games.csv')
+    df = pd.read_csv(PATH_PREFIX + 'games.csv')
     
-    # # train the models    
+    # train the models    
     train_models(df)
     
     # grab board positions (for checking legal move)
