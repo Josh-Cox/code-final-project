@@ -347,9 +347,72 @@ def central_control_eval(board_pos):
         
     return np.array(central_control)
 
+def encode_moves_binary(moves):
+    """
+    Encodes a position to binary columns (to be used with binary and vector encodings)
+    
+    :param moves: list of moves in format E.g. "e5d5" or for promotion to queen "e4e8q"
+    """
+    
+    # data to create dataframe from
+    data = []
+    
+    # loop through every row of dataframe
+    for row in moves:
+        
+        # get the start and end square
+        start_square, end_square = row[:2], row[2:]
+        
+        # get start and end columns and ranks
+        start_column, start_rank = start_square[0], start_square[1]
+        end_column, end_rank = end_square[0], end_square[1]
+        
+        # blank row entry
+        blank_list = [0] * 36
+        
+        # set needed start and end positions indexes to 1
+        blank_list[ord(start_column) - 88] = 1
+        blank_list[int(start_rank)] = 1
+        blank_list[ord(end_column) - 72] = 1
+        blank_list[int(end_rank) + 16] = 1
+        
+        # if there is a promotion
+        if len(row) > 4:
+            promotion_index = 35
+            # determine the correct column based on piece
+            match (row[4]):
+                case 'q':
+                    promotion_index = 32
+                    break
+                case 'r':
+                    promotion_index = 33
+                    break
+                case 'b':
+                    promotion_index = 34
+                    break
+                case 'n':
+                    promotion_index = 35
+                    break
+                
+            # set correct promotion index to 1
+            blank_list[promotion_index] = 1    
+        
+        # append list to data
+        data.append(blank_list)
+        
+        
+    # create dataframe from data
+    encoded_df = pd.DataFrame(data, columns=['s1', 's2', 's3', 's4', 's5', 's6', 's7', 's8', 'sa', 'sb', 'sc', 'sd', 'se',
+                                             'sf', 'sg', 'sh', 'e1', 'e2', 'e3', 'e4', 'e5', 'e6', 'e7', 'e8', 'ea', 'eb',
+                                             'ec', 'ed', 'ee', 'ef', 'eg', 'eh', 'promote_q', 'promote_r', 'promote_b',
+                                             'promote_n'])
+    
+    return encoded_df
+    
 def encode_moves_binary_vector(moves):
     """
     Encodes the "next_move" with binary start position and vector move
+    
     :param moves: list of moves in format E.g. "e4d5" or for promotion to queen "e4e8q"
     """
         
@@ -412,7 +475,6 @@ def encode_moves_binary_vector(moves):
                                              'columns_moved', 'ranks_moved', 'promote_q', 'promote_r', 'promote_b', 'promote_n'])
     
     return encoded_df
-
 
 def encode_move_std(move):
     mapping_dict = {
@@ -493,7 +555,7 @@ def generate_df(dbpath, k_safety_method, encode_method):
     :param encode-method: method for encoding next move (value, binary, binary + vector)
     """
     
-    # access games database8
+    # access games database
     pgn = open(dbpath)
     
     # create list of inputs
@@ -515,8 +577,12 @@ def generate_df(dbpath, k_safety_method, encode_method):
         
     
     # encode next_move column
-    if encode_method == "binary":
+    if encode_method == "vector":
         encoded_df = encode_moves_binary_vector(df['next_move'].to_numpy())
+        df = pd.concat([df, encoded_df], axis=1)
+        print(df.iloc[:, -4:])
+    elif encode_method == "binary":
+        encoded_df = encode_moves_binary(df['next_move'].to_numpy())
         df = pd.concat([df, encoded_df], axis=1)
         print(df.iloc[:, -4:])
     else:
@@ -532,4 +598,4 @@ def generate_df(dbpath, k_safety_method, encode_method):
     return df
     
 if __name__ == "__main__":
-    generate_df('../data/lichess-2023-11', 'std', 'binary')
+    print(generate_df('../data/test_games', 'std', 'binary'))
