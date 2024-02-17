@@ -7,41 +7,13 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import random
 
-from joblib import dump, load
+from joblib import load
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.metrics import precision_recall_fscore_support
 
-PATH_PREFIX = '../data/'
+PATH_PREFIX = '../models/'
 
-
-# ----------------------------------------------------------------
-    
-def train_models(df):
-    """
-    Trains the models with the given dataframe and saves it to a .joblib file. Also saves X_test to csv file.
-
-    :param df: the dataframe to train the models on
-    """
-    
-    # create input and output features
-    X = df.drop(columns=['board_pos', 'next_move_encoded'])
-    y = df['next_move_encoded']
-    
-    # split into test and train data
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
-    
-    # create model
-    gb = GradientBoostingClassifier(n_estimators=1000, min_samples_split=2, max_features=5, random_state=42)
-    
-    # fit model
-    gb.fit(X_train, y_train)
-    
-    # save model to file
-    dump(gb, PATH_PREFIX + 'gb.joblib')
-    
-    # save test data to csv
-    X_test.to_csv(PATH_PREFIX + 'split_test_data.csv', index=False)
     
 def make_predictions(boards):
     """
@@ -160,30 +132,11 @@ def check_if_legal(board, move, method="std"):
         
         # return True if move is in set of legal moves, else return False
         return move in board.legal_moves
-         
-def preprocess_data(filename, k_safety_method, encode_method):
-    """
-    Preprocess the dataframe and save to csv file
-    
-    :param filename: name of file that contains chess games as PGNs
-    """
-    
-    # get file path
-    path = PATH_PREFIX + filename
-    # generate dataframe from games
-    df = generate_df(path, k_safety_method, encode_method)
-    # save to csv file
-    df.to_csv(PATH_PREFIX + 'games.csv', index=False)
+        
     
 def main():
-    # preprocess the dataframe
-    preprocess_data('lichess-2023-11', 'std', 'std')
-    
     # grab df from games.csv
     df = pd.read_csv(PATH_PREFIX + 'games.csv')
-    
-    # train the models    
-    train_models(df)
     
     # grab board positions (for checking legal move)
     boards = df['board_pos']
