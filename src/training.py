@@ -46,14 +46,17 @@ def train_models(df, encoding_method='std'):
         
         y = df[cols_to_keep].copy()
                 
-        print(y.head)
-        
     
     # split into test and train data
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
     
+    unique_classes = y_train.apply(lambda col: len(col.unique()))
+    columns_with_multiple_classes = unique_classes[unique_classes > 1].index
+    
+    y_train_filtered = y_train[columns_with_multiple_classes]
+    
     model = MultiOutputClassifier(GradientBoostingClassifier(random_state=42))
-    model.fit(X_train, y_train)
+    model.fit(X_train, y_train_filtered)
     
     # create model
     # gb = GradientBoostingClassifier(n_estimators=1000, min_samples_split=2, max_features=5, random_state=42)
@@ -66,6 +69,8 @@ def train_models(df, encoding_method='std'):
     
     # save test data to csv
     X_test.to_csv(MODEL_PREFIX + 'split_test_data.csv', index=False)
+    y_test.to_csv(MODEL_PREFIX + 'split_answer_data.csv', index=False)
+    y_train_filtered.to_csv(MODEL_PREFIX + 'split_answer_filt_data.csv', index=False)
     
 def main():
     

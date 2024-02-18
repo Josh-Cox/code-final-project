@@ -437,8 +437,8 @@ def encode_moves_binary_vector(moves):
         blank_list = [0] * 22
         
         # set needed start position indexes to 1
-        blank_list[ord(start_column) - 88] = 1
-        blank_list[int(start_rank)] = 1
+        blank_list[ord(start_column) - 89] = 1
+        blank_list[int(start_rank) - 1] = 1
         
         # columns and ranks moved
         blank_list[16] = columns_moved
@@ -558,14 +558,21 @@ def generate_df(dbpath, k_safety_method, encode_method):
     # access games database
     pgn = open(dbpath)
     
+    # # create list of inputs
+    # inputs = []
+    # game = chess.pgn.read_game(pgn)
+    # while (game != None):
+    #     singleInput = create_model_input(game, k_safety_method)
+    #     if singleInput != None:
+    #         inputs.append(singleInput)
+    #     game = chess.pgn.read_game(pgn)
+    
     # create list of inputs
     inputs = []
-    game = chess.pgn.read_game(pgn)
-    while (game != None):
-        singleInput = create_model_input(game, k_safety_method)
+    for i in range (250):
+        singleInput = create_model_input(chess.pgn.read_game(pgn), k_safety_method)
         if singleInput != None:
             inputs.append(singleInput)
-        game = chess.pgn.read_game(pgn)
         
     
     columns = ["board_pos", "bitboard", "w_safety", "b_safety", "w_central", "b_central", "w_rating", "b_rating", "turn", "next_move"]
@@ -582,11 +589,9 @@ def generate_df(dbpath, k_safety_method, encode_method):
     if encode_method == "vector":
         encoded_df = encode_moves_binary_vector(df['next_move'].to_numpy())
         df = pd.concat([df, encoded_df], axis=1)
-        print(df.iloc[:, -4:])
     elif encode_method == "binary":
         encoded_df = encode_moves_binary(df['next_move'].to_numpy())
         df = pd.concat([df, encoded_df], axis=1)
-        print(df.iloc[:, -4:])
     else:
         df['next_move_encoded'] = df['next_move'].apply(encode_move_std)
         
@@ -600,4 +605,4 @@ def generate_df(dbpath, k_safety_method, encode_method):
     return df
     
 if __name__ == "__main__":
-    print(generate_df('../data/test_games', 'std', 'binary'))
+    generate_df('../data/test_games', 'std', 'binary')

@@ -14,6 +14,45 @@ from sklearn.metrics import precision_recall_fscore_support
 
 PATH_PREFIX = '../models/'
 
+def make_predictions_multi(boards):
+        
+    # get test data from train_test_split
+    X_test = pd.read_csv(PATH_PREFIX + 'split_test_data.csv')
+    
+    # load trained model from file
+    model = load(PATH_PREFIX + 'gb.joblib')
+    
+    test_data = X_test.to_numpy()
+    X_single_pos = test_data[0]
+    print(X_single_pos)
+    X_single_pos = X_single_pos.reshape(1, -1)
+    
+    # get legal moves for board position
+    # legal_moves = X_board_pos.legal_moves
+    
+    # make predictions with probabilities
+    predicted_probs_list = model.predict_proba(X_single_pos)
+    
+    # Assuming you have a list of moves for each output column
+    moves_lists = [model.estimators_[i].classes_ for i in range(len(predicted_probs_list))]
+
+    # Group predicted moves for each row
+    grouped_moves = [[] for _ in range(len(X_single_pos))]
+
+    # Iterate over each output column
+    for i, predicted_probs in enumerate(predicted_probs_list):
+        # Get the moves for the current output column
+        moves_list = moves_lists[i]
+        
+        # Filter predictions by legality and add to the corresponding row
+        for row_index, probs in enumerate(predicted_probs):
+            legal_moves = [moves_list[j] for j in range(len(probs))]
+            grouped_moves[row_index].extend(legal_moves)
+
+    # Print grouped predicted moves for each row
+    print("Grouped Predicted Moves:")
+    for row_moves in grouped_moves:
+        print(row_moves)
     
 def make_predictions(boards):
     """
@@ -29,17 +68,17 @@ def make_predictions(boards):
     # load trained model from file
     model = load(PATH_PREFIX + 'gb.joblib')
     
-    # extract features from test data
-    feature_names = X_test.columns
+    # # extract features from test data
+    # feature_names = X_test.columns
     
-    # feature importance
-    feature_importances = model.feature_importances_
+    # # feature importance
+    # feature_importances = model.feature_importances_
     
-    # df of features and their importance
-    feature_importance_df = pd.DataFrame({'Feature': feature_names, 'Importance': feature_importances})
+    # # df of features and their importance
+    # feature_importance_df = pd.DataFrame({'Feature': feature_names, 'Importance': feature_importances})
     
-    # sort the df by importance
-    feature_importance_df.sort_values(by='Importance', ascending=False)
+    # # sort the df by importance
+    # feature_importance_df.sort_values(by='Importance', ascending=False)
     
     # TODO -- Currently only predicting one position -> Loop through all positions and save predicitons for each
     
@@ -71,13 +110,13 @@ def make_predictions(boards):
         best_move, _ = max(filtered_preds, key=lambda x: x[1])
         print(f"Model predicted: {best_move}")
         
-    # plot the importance
-    plt.figure(figsize=(10, 6))
-    plt.barh(feature_importance_df['Feature'], feature_importance_df['Importance'])
-    plt.xlabel('Importance')
-    plt.ylabel('Feature')
-    plt.title('Feature Importance')
-    plt.show()
+    # # plot the importance
+    # plt.figure(figsize=(10, 6))
+    # plt.barh(feature_importance_df['Feature'], feature_importance_df['Importance'])
+    # plt.xlabel('Importance')
+    # plt.ylabel('Feature')
+    # plt.title('Feature Importance')
+    # plt.show()
     
 def check_if_legal(board, move, method="std"):
     """
@@ -142,7 +181,7 @@ def main():
     boards = df['board_pos']
     
     # make predictions
-    make_predictions(boards)
+    make_predictions_multi(boards)
 
     
 if __name__ == '__main__':
