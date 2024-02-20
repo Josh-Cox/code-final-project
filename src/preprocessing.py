@@ -6,6 +6,8 @@ import re
 import numpy as np
 import pandas as pd
 
+MODEL_PREFIX = '../models/'
+
 
 def addition_factorial(num):
     """
@@ -558,21 +560,21 @@ def generate_df(dbpath, k_safety_method, encode_method):
     # access games database
     pgn = open(dbpath)
     
-    # # create list of inputs
-    # inputs = []
-    # game = chess.pgn.read_game(pgn)
-    # while (game != None):
-    #     singleInput = create_model_input(game, k_safety_method)
-    #     if singleInput != None:
-    #         inputs.append(singleInput)
-    #     game = chess.pgn.read_game(pgn)
-    
     # create list of inputs
     inputs = []
-    for i in range (250):
-        singleInput = create_model_input(chess.pgn.read_game(pgn), k_safety_method)
+    game = chess.pgn.read_game(pgn)
+    while (game != None):
+        singleInput = create_model_input(game, k_safety_method)
         if singleInput != None:
             inputs.append(singleInput)
+        game = chess.pgn.read_game(pgn)
+    
+    # create list of inputs
+    # inputs = []
+    # for i in range (250):
+    #     singleInput = create_model_input(chess.pgn.read_game(pgn), k_safety_method)
+    #     if singleInput != None:
+    #         inputs.append(singleInput)
         
     
     columns = ["board_pos", "bitboard", "w_safety", "b_safety", "w_central", "b_central", "w_rating", "b_rating", "turn", "next_move"]
@@ -600,9 +602,10 @@ def generate_df(dbpath, k_safety_method, encode_method):
     
     # drop next_move column
     df.drop(columns=['next_move'], inplace=True)
+    
+    # save to csv file
+    df.to_csv(MODEL_PREFIX + 'games.csv', index=False)
 
     
-    return df
-    
 if __name__ == "__main__":
-    generate_df('../data/test_games', 'std', 'binary')
+    generate_df('../data/test_games', 'std', 'std')

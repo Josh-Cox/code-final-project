@@ -8,20 +8,6 @@ from sklearn.multioutput import MultiOutputClassifier
 DATA_PREFIX = '../data/'
 MODEL_PREFIX = '../models/'
 
-def preprocess_data(filename, k_safety_method, encode_method):
-    """
-    Preprocess the dataframe and save to csv file
-    
-    :param filename: name of file that contains chess games as PGNs
-    """
-    
-    # get file path
-    path = DATA_PREFIX + filename
-    # generate dataframe from games
-    df = generate_df(path, k_safety_method, encode_method)
-    # save to csv file
-    df.to_csv(MODEL_PREFIX + 'games.csv', index=False)
-
 def train_models(df, encoding_method='std'):
     """
     Trains the models with the given dataframe and saves it to a .joblib file. Also saves X_test to csv file.
