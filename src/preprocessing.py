@@ -2,11 +2,28 @@ import sys
 import chess.pgn
 import random
 import copy
+import time
 import re
 import numpy as np
 import pandas as pd
 
+# Global Constant Values
 MODEL_PREFIX = '../models/'
+PIECE_VALUES = {
+    '.': 0,
+    'p': 1,
+    'r': 2,
+    'n': 3,
+    'b': 4,
+    'q': 5,
+    'k': 6,
+    'P': 7,
+    'R': 8,
+    'N': 9,
+    'B': 10,
+    'Q': 11,
+    'K': 12,
+}
 
 
 def addition_factorial(num):
@@ -44,7 +61,7 @@ def get_random_pos(game, move_number=-1):
 
     :param game: game to find position in
     :param move_number: move number to return position of
-    :return: random board position as FEN
+    :return: [random board position as FEN, next move]
     """
     board = game.board()
     
@@ -89,28 +106,7 @@ def convert_to_bitboard(fen):
     """
 
     # convert fen to board
-    board = chess.Board(fen)
-
-    # convert to string
-    board = str(board)
-
-    # define piece values
-    piece_values = {
-        '.': 0,
-        'p': 1,
-        'r': 2,
-        'n': 3,
-        'b': 4,
-        'q': 5,
-        'k': 6,
-        'P': 7,
-        'R': 8,
-        'N': 9,
-        'B': 10,
-        'Q': 11,
-        'K': 12,
-        
-    }
+    board = str(chess.Board(fen))
     
     def convert_to_value(x):
         """
@@ -119,12 +115,13 @@ def convert_to_bitboard(fen):
         :param x: character to convert
         :return: integer values respetive to character
         """
-        return piece_values[x]
+        return PIECE_VALUES[x]
 
     # vectorize function
     vconvert = np.vectorize(convert_to_value)
 
     # remove newlines and whitespace
+    # board = re.sub(r"[\n\t\s]*", "", board)
     board = np.char.replace(board, ' ', '')
     board = np.char.replace(board, '\n', '')
 
@@ -177,18 +174,7 @@ def check_top_rank(color, pos):
         else:
             return False
 
-def king_safety_eval(king_pos, method, bitboard):
-    """
-    Evaluates the safety of given king (cap of 3 pushes for each pawn)
-
-    :param king_pos: position of king to evaluate
-    :param method: method to use (standard or exponential)
-    :param bitboard: bitboard of position
-    :return: value to represent evaluation of king safety
-    
-    """
-    
-    def check_king_edges(king_pos, color):
+def check_king_edges(king_pos, color):
         """
         Checks if given king is at an edge of the board
 
@@ -211,101 +197,108 @@ def king_safety_eval(king_pos, method, bitboard):
         else:
             return 'N'
     
-    def check_pawns_in_file(color, checking_pos):
-        """
-        Check given file for a friendly pawn
+def check_pawns_in_file(color, checking_pos, bitboard, method):
+    """
+    Check given file for a friendly pawn
 
-        :param color: color pawn to check for
-        :param checking_pos: starting position to check for pawn (moves up the file from this position)
-        """
-        
-        # initialize points
-        points = 0
-        
-        # set value for respective pawn color
-        if color == 'w':
-            pawn_value = 7
-        else:
-            pawn_value = 1
-        
-        # loop 3 times (max safety rating is 3 for standard)
-        for i in range(1, 4):
-            # break if top rank (avoid index error)
-            if check_top_rank(color, checking_pos):
-                # set points to max and break
-                if method == "standard":
-                    points = 3
-                else:
-                    points = addition_factorial(3)
-                break
-            
-            # check if next square has friendly pawn
-            if bitboard[checking_pos] == pawn_value:
-                return points
+    :param color: color pawn to check for
+    :param checking_pos: starting position to check for pawn (moves up the file from this position)
+    """
+    
+    # initialize points
+    points = 0
+    
+    # set value for respective pawn color
+    if color == 'w':
+        pawn_value = 7
+    else:
+        pawn_value = 1
+    
+    # loop 3 times (max safety rating is 3 for standard)
+    for i in range(1, 4):
+        # break if top rank (avoid index error)
+        if check_top_rank(color, checking_pos):
+            # set points to max and break
+            if method == "standard":
+                points = 3
             else:
-                # move up the file
-                if color == 'w':
-                    checking_pos -= 8
-                else:
-                    checking_pos += 8
-                    
-                # check method
-                if method == "standard":
-                    points = i
-                else:
-                    points = addition_factorial(i)
-
-        return points
-
-
+                points = addition_factorial(3)
+            break
         
-    # Determine pawn positions
-    def check_files(color, king_edge, king_pos):
-        """
-        Checks appropriate files for pawns
-        
-        :param color: color pawns to check for
-        """
-        
-        # initialize safety
-        safety = 1
-        
-        # if color is white
-        if color == 'w':
-                 
-            # check king's file
-            checking_pos = king_pos[0] - 8
-            
-            # check method
-            safety += check_pawns_in_file('w', checking_pos)
-            
-            # check left and/or right file
-            if king_edge[0] != 'R':
-                checking_pos = king_pos[0] - 7
-                safety += check_pawns_in_file('w', checking_pos)
-                
-            if king_edge[0] != 'L':
-                checking_pos = king_pos[0] - 9
-                safety += check_pawns_in_file('w', checking_pos)
+        # check if next square has friendly pawn
+        if bitboard[checking_pos] == pawn_value:
+            return points
         else:
-            
-            # check king's file
-            checking_pos = king_pos[1] + 8
-            safety += check_pawns_in_file('b', checking_pos)
-            
-            # check left and/or right file
-            if king_edge[1] != 'R':
-                checking_pos = king_pos[1] + 9
-                safety += check_pawns_in_file('b', checking_pos)
-            if king_edge[1] != 'L':
-                checking_pos = king_pos[1] + 7
-                safety += check_pawns_in_file('b', checking_pos)
+            # move up the file
+            if color == 'w':
+                checking_pos -= 8
+            else:
+                checking_pos += 8
                 
-        return safety
-                
+            # check method
+            if method == "standard":
+                points = i
+            else:
+                points = addition_factorial(i)
 
+    return points
+   
+def check_files(color, king_edge, king_pos, bitboard, method):
+    """
+    Checks appropriate files for pawns
+    
+    :param color: color pawns to check for
+    """
+    
+    # initialize safety
+    safety = 1
+    
+    # if color is white
+    if color == 'w':
+                
+        # check king's file
+        checking_pos = king_pos[0] - 8
+        
+        # check method
+        safety += check_pawns_in_file('w', checking_pos, bitboard, method)
+        
+        # check left and/or right file
+        if king_edge[0] != 'R':
+            checking_pos = king_pos[0] - 7
+            safety += check_pawns_in_file('w', checking_pos, bitboard, method)
+            
+        if king_edge[0] != 'L':
+            checking_pos = king_pos[0] - 9
+            safety += check_pawns_in_file('w', checking_pos, bitboard, method)
+    else:
+        
+        # check king's file
+        checking_pos = king_pos[1] + 8
+        safety += check_pawns_in_file('b', checking_pos, bitboard, method)
+        
+        # check left and/or right file
+        if king_edge[1] != 'R':
+            checking_pos = king_pos[1] + 9
+            safety += check_pawns_in_file('b', checking_pos, bitboard, method)
+        if king_edge[1] != 'L':
+            checking_pos = king_pos[1] + 7
+            safety += check_pawns_in_file('b', checking_pos, bitboard, method)
+            
+    return safety
+
+def king_safety_eval(king_pos, method, bitboard):
+    """
+    Evaluates the safety of given king (cap of 3 pushes for each pawn)
+
+    :param king_pos: position of king to evaluate
+    :param method: method to use (standard or exponential)
+    :param bitboard: bitboard of position
+    :return: value to represent evaluation of king safety
+    
+    """
+                
     king_edge = [check_king_edges(king_pos[0], 'w'), check_king_edges(king_pos[1], 'b')]
-    safety = [check_files('w', king_edge, king_pos), check_files('b', king_edge, king_pos)]
+    safety = [check_files('w', king_edge, king_pos, bitboard, method), check_files('b', king_edge, king_pos, bitboard, method)]
 
     return np.array(safety)
 
@@ -608,4 +601,8 @@ def generate_df(dbpath, k_safety_method, encode_method):
 
     
 if __name__ == "__main__":
-    generate_df('../data/test_games', 'std', 'std')
+    start_time = time.time()
+    generate_df('../data/tiny_test.pgn', 'std', 'std')
+    end_time = time.time()
+    execution_time = end_time - start_time
+    print(f'The script executed in {execution_time} seconds.')
