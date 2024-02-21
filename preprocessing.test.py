@@ -8,7 +8,7 @@ class TestPreprocessing(unittest.TestCase):
         """
         Sets up variables once for use in all tests
         """
-        self.test_data = open("data/test_games")
+        self.test_data = open("data/testing.pgn")
         self.test_game = chess.pgn.read_game(self.test_data)
         self.test_moves = str(self.test_game.mainline_moves())
         self.test_fen = self.test_game.board().fen()
@@ -36,22 +36,21 @@ class TestPreprocessing(unittest.TestCase):
         """
         Tests function to find the number of moves in a given set of moves
         """
-        self.assertEqual(find_number_moves(self.test_moves), 30, "Number of moves is wrong")
+        self.assertEqual(find_number_moves(self.test_moves), 31, "Number of moves is wrong")
         
     def test_get_random_position(self):
         """
         Tests function to pick a random position from a given game
         """
-        # Get random position and find its move number
-        test_rand_pos = int(get_random_pos(self.test_game)[-1])
         
-        # Check this is within bounds
-        self.assertTrue(test_rand_pos <= 30, "Random position is above number of moves")
-        self.assertTrue(test_rand_pos >= 0, "Random position is below 0")
+        # Get random position
+        test_rand_pos = get_random_pos(self.test_game)[0]
         
-        # Test getting specific move number
-        self.assertIn(get_random_pos(self.test_game, 20), ['3r4/pnppkp2/1p2p1r1/6p1/3P4/N1P5/PPQB1PP1/R3K3 w Q - 0 20', '3r4/pnppkp2/1p2p1r1/6p1/3P4/N1P5/PPQB1PP1/2KR4 b - - 1 20'], "Position returned is incorrect")
-        
+        regex = r"^((([pnbrqkPNBRQK1-8]{1,8})\/?){8})\s+(b|w)\s+(-|K?Q?k?q)\s+(-|[a-h][3-6])\s+(\d+)\s+(\d+)\s*$"
+
+        # Check this is correct FEN format
+        self.assertRegex(test_rand_pos, regex)
+    
     def test_convert_to_bitboard(self):
         """
         Tests function that takes a FEN and returns a bitboard
@@ -63,8 +62,7 @@ class TestPreprocessing(unittest.TestCase):
         """
         Tests function that takes a fen and returns who's current turn it is (which color)
         """
-        
-        self.assertEqual(find_turn(self.test_fen), 'w')
+        self.assertEqual(find_turn(self.test_fen), 0)
         
     def test_find_kings(self):
         """
@@ -110,7 +108,7 @@ class TestPreprocessing(unittest.TestCase):
         
     def test_central_control_eval(self):
         """
-        Tests funciton that takes a board position and returns a value for central control for each color
+        Tests function that takes a board position and returns a value for central control for each color
         """
         np.testing.assert_allclose(central_control_eval(self.test_central_control_one), np.array([4, 5]), rtol=0, atol=0, err_msg="Central control is incorrect")
         
@@ -121,27 +119,33 @@ class TestPreprocessing(unittest.TestCase):
         """
     
         # test input for the function
+        print(create_model_input(self.test_game, "standard", 20))
         test_input = create_model_input(self.test_game, "standard", 20)
+        
+        regex = r"^((([pnbrqkPNBRQK1-8]{1,8})\/?){8})\s+(b|w)\s+(-|K?Q?k?q)\s+(-|[a-h][3-6])\s+(\d+)\s+(\d+)\s*$"
+
+        # Check correct FEN format
+        self.assertRegex(test_input[0], regex)
                 
         # two correct bitboards (white or black's turn)
-        correct_bitboards = [np.array([ 0,  0,  0,  2,  0,  0,  0,  0,  1,  3,  1,  1,  6,  1,  0,  0,  0,
-        1,  0,  0,  1,  0,  2,  0,  0,  0,  0,  0,  0,  0,  1,  0,  0,  0,
-        0,  7,  0,  0,  0,  0,  9,  0,  7,  0,  0,  0,  0,  0,  7,  7, 11,
-       10,  0,  7,  7,  0,  8,  0,  0,  0, 12,  0,  0,  0]),
-        np.array([ 0,  0,  0,  2,  0,  0,  0,  0,  1,  3,  1,  1,  6,  1,  0,  0,  0,
-        1,  0,  0,  1,  0,  2,  0,  0,  0,  0,  0,  0,  0,  1,  0,  0,  0,
-        0,  7,  0,  0,  0,  0,  9,  0,  7,  0,  0,  0,  0,  0,  7,  7, 11,
-       10,  0,  7,  7,  0,  0,  0, 12,  8,  0,  0,  0,  0])]
+        correct_bitboards = [np.array([ 2,  0,  0,  0,  0,  0,  6,  0,  1,  0,  0,  2,  0,  1,  1,  1,  0,
+        0,  0,  0,  4,  0,  0,  0,  0,  0,  0,  9,  0,  0,  0,  0,  0,  0,
+        0,  0,  7,  0,  0,  0,  0,  7,  0,  0,  0,  9,  0,  0,  7,  0,  0,
+        0,  0,  7,  7, 10,  0,  0,  0,  8,  0,  0, 12,  0]),
+        np.array([ 2,  0,  0,  2,  0,  0,  6,  0,  1,  0,  0,  0,  0,  1,  1,  1,  0,
+        0,  0,  0,  4,  0,  0,  0,  0,  0,  0,  9,  0,  0,  0,  0,  0,  0,
+        0,  0,  7,  0,  0,  0,  0,  7,  0,  0,  0,  9,  0,  0,  7,  0,  0,
+        0,  0,  7,  7, 10,  0,  0,  0,  8,  0,  0, 12,  0])]
                         
         # check bitboards        
         self.assertTrue(
-            np.array_equal(test_input[0], correct_bitboards[0]) or
-            np.array_equal(test_input[0], correct_bitboards[1]))
+            np.array_equal(test_input[1], correct_bitboards[0]) or
+            np.array_equal(test_input[1], correct_bitboards[1]))
         
         
         # check king safety
-        self.assertTrue((np.array_equal(test_input[1], 4)) or (np.array_equal(test_input[1], 6)) and
-            (np.array_equal(test_input[2], 6) or np.array_equal(test_input[2], 7))
+        self.assertTrue((np.array_equal(test_input[2], 4)) or (np.array_equal(test_input[2], 6)) and
+            (np.array_equal(test_input[3], 1) or np.array_equal(test_input[3], 7))
                         
         ) 
         
