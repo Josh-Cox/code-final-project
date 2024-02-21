@@ -561,20 +561,20 @@ def generate_df(dbpath, k_safety_method, encode_method):
     pgn = open(dbpath)
     
     # create list of inputs
-    inputs = []
-    game = chess.pgn.read_game(pgn)
-    while (game != None):
-        singleInput = create_model_input(game, k_safety_method)
-        if singleInput != None:
-            inputs.append(singleInput)
-        game = chess.pgn.read_game(pgn)
-    
-    # create list of inputs
     # inputs = []
-    # for i in range (250):
-    #     singleInput = create_model_input(chess.pgn.read_game(pgn), k_safety_method)
+    # game = chess.pgn.read_game(pgn)
+    # while (game != None):
+    #     singleInput = create_model_input(game, k_safety_method)
     #     if singleInput != None:
     #         inputs.append(singleInput)
+    #     game = chess.pgn.read_game(pgn)
+    
+    # create list of inputs
+    inputs = []
+    for i in range (100_000):
+        singleInput = create_model_input(chess.pgn.read_game(pgn), k_safety_method)
+        if singleInput != None:
+            inputs.append(singleInput)
         
     
     columns = ["board_pos", "bitboard", "w_safety", "b_safety", "w_central", "b_central", "w_rating", "b_rating", "turn", "next_move"]
@@ -608,4 +608,4 @@ def generate_df(dbpath, k_safety_method, encode_method):
 
     
 if __name__ == "__main__":
-    generate_df('../data/test_games', 'std', 'std')
+    generate_df('../data/lichess-2023-11', 'std', 'std')
