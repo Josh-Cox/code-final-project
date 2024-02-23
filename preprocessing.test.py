@@ -150,15 +150,15 @@ class TestPreprocessing(unittest.TestCase):
         ) 
         
         # check central control
-        self.assertEqual(test_input[3], 4)
-        self.assertEqual(test_input[4], 1)
+        self.assertEqual(test_input[4], 5)
+        self.assertEqual(test_input[5], 1)
         
         # check ratings      
-        self.assertEqual(test_input[5], '1961')
-        self.assertEqual(test_input[6], '1618')
+        self.assertEqual(test_input[6], '1486')
+        self.assertEqual(test_input[7], '1417')
         
         # check turn
-        self.assertTrue(test_input[7] == 'w' or test_input[7] == 'b')
+        self.assertTrue(test_input[8] == 0 or test_input[8] == 1)
         
                 
 
