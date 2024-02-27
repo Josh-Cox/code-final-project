@@ -471,7 +471,15 @@ def encode_moves_binary_vector(moves):
     
     return encoded_df
 
-def encode_move_std(move):
+def encode_move_std(move):    
+    # Convert to list
+    move = [*str(move)]
+    
+    # Check if promotion in move
+    if len(move) > 4:
+        move[4] = move[4].upper()
+                
+    # Map of move letter to number
     mapping_dict = {
             'a': '1',
             'b': '2',
@@ -481,17 +489,18 @@ def encode_move_std(move):
             'f': '6',
             'g': '7',
             'h': '8',
-            'r': '1',
-            'n': '2',
-            'b': '3',
-            'q': '4',
+            'R': '1',
+            'N': '2',
+            'B': '3',
+            'Q': '4',
         }
         
-    move = [*str(move)]
+    # Loop through each char, if not number then convert
     for index, char in enumerate(move):
         if char.isalpha():
             move[index] = mapping_dict[char]
-        
+    
+    # Convert back to string and return
     move = ''.join(move)
     return str(move)
 
@@ -554,20 +563,20 @@ def generate_df(dbpath, k_safety_method, encode_method):
     pgn = open(dbpath)
     
     # create list of inputs
-    # inputs = []
-    # game = chess.pgn.read_game(pgn)
-    # while (game != None):
-    #     singleInput = create_model_input(game, k_safety_method)
-    #     if singleInput != None:
-    #         inputs.append(singleInput)
-    #     game = chess.pgn.read_game(pgn)
-    
-    # create list of inputs
     inputs = []
-    for i in range (100_000):
-        singleInput = create_model_input(chess.pgn.read_game(pgn), k_safety_method)
+    game = chess.pgn.read_game(pgn)
+    while (game != None):
+        singleInput = create_model_input(game, k_safety_method)
         if singleInput != None:
             inputs.append(singleInput)
+        game = chess.pgn.read_game(pgn)
+    
+    # create list of inputs
+    # inputs = []
+    # for i in range (100_000):
+    #     singleInput = create_model_input(chess.pgn.read_game(pgn), k_safety_method)
+    #     if singleInput != None:
+    #         inputs.append(singleInput)
         
     
     columns = ["board_pos", "bitboard", "w_safety", "b_safety", "w_central", "b_central", "w_rating", "b_rating", "turn", "next_move"]
@@ -594,11 +603,11 @@ def generate_df(dbpath, k_safety_method, encode_method):
     df.drop(columns=['bitboard'], inplace=True)
     
     # drop next_move column
-    df.drop(columns=['next_move'], inplace=True)
+    # df.drop(columns=['next_move'], inplace=True)
     
     # save to csv file
     df.to_csv(MODEL_PREFIX + 'games.csv', index=False)
 
     
 if __name__ == "__main__":
-    generate_df('../data/tiny_test.pgn', 'std', 'std')
+    generate_df('../data/lichess-2023-11', 'std', 'std')

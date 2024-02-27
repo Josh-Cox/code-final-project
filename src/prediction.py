@@ -66,7 +66,7 @@ def make_predictions_multi(boards):
     for row_moves in grouped_moves:
         print(row_moves)
     
-def make_predictions(boards):
+def make_predictions():
     """
     Makes predictions using trained models and test data
 
@@ -108,14 +108,11 @@ def make_predictions(boards):
     filtered_y_test = []
     filtered_boards = []
     
-    boards = list(boards)
+    boards = list(boards['board_pos'])
     y_test = list(y_test['next_move_encoded'])
-    print(decode_std(y_test[9]))
-    print(decode_std(y_pred[9]))
-    print(chess.Board(boards[9]))
             
     for i in range(len(y_pred)):
-        if is_legal(chess.Board(boards[i]), y_pred[i]):
+        if is_legal(boards[i], y_pred[i]):
             filtered_y_pred.append(y_pred[i])
             filtered_y_test.append(y_test[i])
             filtered_boards.append(boards[i])
@@ -150,7 +147,7 @@ def single_prediction(pos):
     
     move_classes = le.inverse_transform(model.classes_)
         
-    filtered_preds = [(move, prob) for move, prob in zip(move_classes, predicted_probs) if check_if_legal(X_board_pos, move)]
+    filtered_preds = [(move, prob) for move, prob in zip(move_classes, predicted_probs) if is_legal(X_board_pos, move)]
     
     return filtered_preds
     
@@ -186,7 +183,7 @@ def is_legal(board, move, method="std"):
 
     
         # decode (only decoding 1st and 3rd chars as numbers aren't changed E.g. e5d7 == 5547)
-        new_str = DECODING_TABLE[move[0]] + move[1] + DECODING_TABLE[move[2]] + move[3]
+        new_str = decode_std(move)
         
         # if move includes a promotion
         if len(move) >= 5:
@@ -207,16 +204,16 @@ def is_legal(board, move, method="std"):
             new_str += promotion_dict[move[4]]
             
         # convert move to python-chess move format
-        move = chess.Move.from_uci(new_str)
+        new_move = chess.Move.from_uci(new_str)
         
         # return True if move is in set of legal moves, else return False
-        return move in board.legal_moves
+        return new_move in chess.Board(board).legal_moves
         
 def decode_std(move):
     move = str(move)
 
     res = DECODING_TABLE[move[0]] + move[1] + DECODING_TABLE[move[2]] + move[3]
-    
+        
     return res
     
 def display_single_result(predictions):
