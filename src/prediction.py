@@ -6,6 +6,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import random
+import shap
+import xgboost as xgb
 
 from joblib import load
 from sklearn.model_selection import train_test_split
@@ -14,7 +16,10 @@ from sklearn.metrics import precision_recall_fscore_support
 from sklearn.metrics import accuracy_score, f1_score
 from sklearn.preprocessing import LabelEncoder
 
+# path to model files (train_test_split and model joblibs)
 PATH_PREFIX = '../models/'
+
+# global table to decode chess moves
 DECODING_TABLE = {
     '1': 'a',
     '2': 'b',
@@ -25,6 +30,17 @@ DECODING_TABLE = {
     '7': 'g',
     '8': 'h',
 }
+
+# promotion hashmap
+PROMOTION_DECODING_TABLE = {
+    '1': 'r',
+    '2': 'n',
+    '3': 'b',
+    '4': 'q'
+}
+
+# initialize SHAP
+# shap.initjs()
 
 def make_predictions_multi(boards):
         
@@ -80,9 +96,6 @@ def make_predictions():
     y_test = pd.read_csv(PATH_PREFIX + 'y_test.csv')
     boards = pd.read_csv(PATH_PREFIX + 'Boards.csv')
     
-    # load trained model from file
-    model = load(PATH_PREFIX + 'gb.joblib')
-    
     # # extract features from test data
     # feature_names = X_test.columns
     
@@ -94,6 +107,9 @@ def make_predictions():
     
     # # sort the df by importance
     # feature_importance_df.sort_values(by='Importance', ascending=False)
+    
+    # load trained model from file
+    model = load(PATH_PREFIX + 'gb.joblib')
     
     # make predictions with probabilities
     y_pred = model.predict(X_test)
@@ -118,10 +134,10 @@ def make_predictions():
             filtered_boards.append(boards[i])
          
 
-    # print(accuracy_score(y_test, filtered_y_pred))
-    # print(f1_score(y_test, filtered_y_pred, average='weighted'))
+    print(accuracy_score(filtered_y_test, filtered_y_pred))
+    print(f1_score(filtered_y_test, filtered_y_pred, average='weighted'))
     
-    UI_loop(filtered_boards, filtered_y_pred, filtered_y_test)
+    # UI_loop(filtered_boards, filtered_y_pred, filtered_y_test)
     
     return y_pred
     
@@ -192,16 +208,9 @@ def is_legal(board, move, method="std"):
             if move[4] not in "1234":
                 return False
             
-            # promotion hashmap
-            promotion_dict = {
-                '1': 'r',
-                '2': 'n',
-                '3': 'b',
-                '4': 'q'
-            }
             
             # encode last char
-            new_str += promotion_dict[move[4]]
+            new_str += PROMOTION_DECODING_TABLE[move[4]]
             
         # convert move to python-chess move format
         new_move = chess.Move.from_uci(new_str)
@@ -211,8 +220,11 @@ def is_legal(board, move, method="std"):
         
 def decode_std(move):
     move = str(move)
-
+    
     res = DECODING_TABLE[move[0]] + move[1] + DECODING_TABLE[move[2]] + move[3]
+    
+    if len(move) > 4:
+        res += PROMOTION_DECODING_TABLE[move[4]]
         
     return res
     
@@ -248,11 +260,32 @@ def UI_loop(boards, y_pred, y_test):
         pos = int(input("Please enter a number: "))
     
     
+def interpret_model():
+    # load trained model from file
+    model = load(PATH_PREFIX + 'gb.joblib')
+    X_test = pd.read_csv(PATH_PREFIX + 'X_test.csv')
+    y_train = pd.read_csv(PATH_PREFIX + 'y_train.csv')
+    
+    # Decode
+    le = LabelEncoder()
+    le.fit(y_train)
+    decoded_class_names = le.classes_
+    
+    explainer = shap.Explainer(model.predict, X_test)
+    shap_values = explainer(X_test[0:2])
 
+    feature_names_with_classes = X_test.columns.tolist() + decoded_class_names.tolist()
+
+    shap.waterfall_plot(shap.Explanation(values=shap_values[0], feature_names=X_test.columns.tolist(), class_names=decoded_class_names))
+    
 def main():
+  
     
     # make predictions
-    preds = make_predictions()
+    make_predictions()
+    
+    # interpret the model
+    # interpret_model()
     
     # display predictions
     # display_single_result(preds)

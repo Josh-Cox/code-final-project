@@ -19,7 +19,8 @@ def train_models(df, encoding_method='std'):
     
     # create input and output features
     if encoding_method == 'std': 
-        X = df.drop(columns=['next_move_encoded'])
+        # TODO: remove 'next_move' in preprocessing
+        X = df.drop(columns=['next_move_encoded', 'next_move'])
         y = df['next_move_encoded']
     elif encoding_method == 'vector':
         # grouping certain columns
@@ -45,6 +46,7 @@ def train_models(df, encoding_method='std'):
     X_test = X_test.drop(columns=['board_pos'])
     X_train = X_train.drop(columns=['board_pos'])
     
+    # Save to csv files for future use
     X_test.to_csv(MODEL_PREFIX + 'X_test.csv', index=False)
     y_test.to_csv(MODEL_PREFIX + 'y_test.csv', index=False)
     y_train.to_csv(MODEL_PREFIX + 'y_train.csv', index=False)
@@ -75,10 +77,7 @@ def train_models(df, encoding_method='std'):
     
     # save model to file
     dump(gb, MODEL_PREFIX + 'gb.joblib')
-    
-
-    # y_train_filtered.to_csv(MODEL_PREFIX + 'split_answer_filt_data.csv', index=False)
-    
+        
 def main():
     
     # set encoding method
@@ -86,6 +85,8 @@ def main():
     
     # grab df from games.csv
     df = pd.read_csv(MODEL_PREFIX + 'games.csv')
+    df['next_move_encoded'] = df['next_move_encoded'].astype('category')
+    print(df.dtypes)
     
     # train the models    
     train_models(df, encoding_method)
