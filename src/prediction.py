@@ -134,12 +134,12 @@ def make_predictions():
             filtered_boards.append(boards[i])
          
 
-    print(accuracy_score(filtered_y_test, filtered_y_pred))
-    print(f1_score(filtered_y_test, filtered_y_pred, average='weighted'))
+    # print(accuracy_score(filtered_y_test, filtered_y_pred))
+    # print(f1_score(filtered_y_test, filtered_y_pred, average='weighted'))
     
     # UI_loop(filtered_boards, filtered_y_pred, filtered_y_test)
     
-    return y_pred
+    return [filtered_y_test, filtered_y_pred, filtered_boards]
     
 def single_prediction(pos):
     

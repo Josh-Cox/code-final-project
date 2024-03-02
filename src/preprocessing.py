@@ -9,6 +9,7 @@ import pandas as pd
 
 # Global Constant Values
 MODEL_PREFIX = '../models/'
+DATA_PREFIX = '../data/'
 PIECE_VALUES = {
     '.': 0,
     'p': 1,
@@ -573,7 +574,7 @@ def generate_df(dbpath, k_safety_method, encode_method):
     
     # create list of inputs
     inputs = []
-    for i in range (100_00):
+    for i in range (1_000_000):
         singleInput = create_model_input(chess.pgn.read_game(pgn), k_safety_method)
         if singleInput != None:
             inputs.append(singleInput)
@@ -603,10 +604,10 @@ def generate_df(dbpath, k_safety_method, encode_method):
     df.drop(columns=['bitboard'], inplace=True)
     
     # drop next_move column
-    # df.drop(columns=['next_move'], inplace=True)
+    df.drop(columns=['next_move'], inplace=True)
     
     # save to csv file
-    df.to_csv(MODEL_PREFIX + 'games.csv', index=False)
+    df.to_csv(DATA_PREFIX + 'games.csv', index=False)
 
     
 if __name__ == "__main__":

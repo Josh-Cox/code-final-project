@@ -10,7 +10,7 @@ import xgboost as xgb
 DATA_PREFIX = '../data/'
 MODEL_PREFIX = '../models/'
 
-def train_models(df, encoding_method='std'):
+def train_models(df, features_to_drop, encoding_method='std'):
     """
     Trains the models with the given dataframe and saves it to a .joblib file. Also saves X_test to csv file.
 
@@ -35,7 +35,11 @@ def train_models(df, encoding_method='std'):
         
         y = df[cols_to_keep].copy()
                 
+    for column in X.columns:
+        if column in features_to_drop:
+            X = X.drop(columns=[column])
     
+    print("DATAFRAME:\n", X)
     # split into test and train data
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
     
@@ -84,12 +88,16 @@ def main():
     encoding_method = "std"
     
     # grab df from games.csv
-    df = pd.read_csv(MODEL_PREFIX + 'games.csv')
+    df = pd.read_csv(DATA_PREFIX + 'lichess-2023-11-100k.csv')
     df['next_move_encoded'] = df['next_move_encoded'].astype('category')
-    print(df.dtypes)
+    df['turn'] = df['turn'].astype('category')
+    
+    # list of features to drop
+    # OPTIONS: 'w_safety', 'b_safety', 'w_central', 'b_central', 'w_rating', 'b_rating', 'turn'
+    features_to_drop = ['w_safety', 'b_safety', 'w_central', 'b_central', 'w_rating', 'b_rating', 'turn']
     
     # train the models    
-    train_models(df, encoding_method)
+    train_models(df, features_to_drop)
     
 if __name__ == '__main__':
     main()
