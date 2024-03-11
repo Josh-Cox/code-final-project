@@ -1,7 +1,11 @@
 from training import *
 from prediction import *
+import matplotlib.pyplot as plt
 import os
 from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score
+from sklearn.preprocessing import StandardScaler
+
+from sklearn.decomposition import PCA
 
 DATA_PREFIX = '../data/'
 MODEL_PREFIX = '../feature_importance/'
@@ -156,8 +160,47 @@ def test_model(model_path, data_path, results_path, name, corr_feat):
         if valid:
             new_df = X_train[corr_feat].merge(y_train, left_index=True, right_index=True)
             corr_train = new_df.corr()
-            f.write(f'Correlation of {corr_feat}: {corr_train}\n')
+            f.write(f'Correlation of {corr_feat}: \n{corr_train}\n')
 
+def pca_analysis(df, model):
+    # drop board pos
+    
+    df = df.drop(columns=['board_pos', 'next_move_encoded'])
+    board_features = df.iloc[:, -64:]
+    
+    additional_features = df[['w_safety', 'b_safety', 'w_central', 'b_central', 'w_rating', 'b_rating', 'turn']]
+    
+    # standardise
+    scaler_board = StandardScaler()
+    board_features_scaled = scaler_board.fit_transform(board_features)
+    additional_features_scaled = scaler_board.fit_transform(additional_features)
+    
+    # X_scaled = pd.DataFrame(data=np.hstack((board_features_scaled, additional_features_scaled)), columns=board_features.columns.tolist() + additional_features.columns.tolist())
+    
+    # apply PCA
+    pca = PCA(n_components=0.95) # retain 95% of variance
+    X_pca = pca.fit_transform(additional_features_scaled)
+    
+            
+    # if folder doesn't exist then create
+    pca_path = MODEL_PREFIX + str(model)
+    if not os.path.isdir(str(pca_path)):
+        os.makedirs(str(pca_path))
+    
+    # write to file
+    with open(pca_path + '/pca.txt', 'w') as f:
+        for component_idx, component in enumerate(pca.components_):
+            top_feature_indices = component.argsort()[-5:][::-1] 
+
+            f.write(f"\nTop features for Principal Component {component_idx + 1}:\n")
+            for feature_idx in top_feature_indices:
+                f.write(f"Feature {feature_idx}: {df.columns[feature_idx]}\n")
+        
+    # plot
+    plt.plot(np.cumsum(pca.explained_variance_ratio_))
+    plt.xlabel("Number of components")
+    plt.ylabel("Cumulative Explained Variance")
+    plt.show()
 
 def main():  
     # set encoding method
@@ -171,10 +214,13 @@ def main():
     
     # list of features to drop
     # OPTIONS: 'w_safety', 'b_safety', 'w_central', 'b_central', 'w_rating', 'b_rating', 'turn'
-    features_to_drop = ['w_safety', 'b_safety', 'w_rating', 'b_rating', 'turn']
+    features_to_drop = ['w_safety', 'b_safety', 'w_central', 'w_rating', 'b_rating']
     
     # train the model - remember to add corr_feat parameter if correlation evaluation wanted (see function docstring)
-    train_model(df, 'gb', features_to_drop, ['w_central', 'b_central'])
+    train_model(df, 'gb', features_to_drop, ['b_central', 'turn'])
+    
+    # PCA
+    # pca_analysis(df, 'gb')
 
     
 if __name__ == '__main__':
