@@ -574,7 +574,7 @@ def generate_df(dbpath, k_safety_method, encode_method):
     
     # create list of inputs
     inputs = []
-    for i in range (1_000_000):
+    for i in range (100_000):
         singleInput = create_model_input(chess.pgn.read_game(pgn), k_safety_method)
         if singleInput != None:
             inputs.append(singleInput)
@@ -611,4 +611,4 @@ def generate_df(dbpath, k_safety_method, encode_method):
 
     
 if __name__ == "__main__":
-    generate_df('../data/lichess-2023-11', 'std', 'std')
+    generate_df('../data/tiny_test.pgn', 'std', 'std')

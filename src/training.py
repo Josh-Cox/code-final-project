@@ -1,5 +1,12 @@
 from preprocessing import *
 from joblib import dump
+from tqdm import tqdm
+import os
+
+from interpret import set_visualize_provider
+from interpret.provider import InlineProvider
+from interpret.glassbox import ExplainableBoostingClassifier
+from interpret import show
 
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import GradientBoostingClassifier
@@ -7,20 +14,24 @@ from sklearn.multioutput import MultiOutputClassifier
 from sklearn.preprocessing import LabelEncoder
 import xgboost as xgb
 
+set_visualize_provider(InlineProvider())
+
 DATA_PREFIX = '../data/'
 MODEL_PREFIX = '../models/'
 
-def train_models(df, features_to_drop, encoding_method='std'):
+def train_models(df, model, encoding_method='std'):
     """
     Trains the models with the given dataframe and saves it to a .joblib file. Also saves X_test to csv file.
 
     :param df: the dataframe to train the models on
+    :param model: name of model to train {'gb', 'ebm', 'dt'}
+    :param encoding_method, default='std': encoding method to use for next move
     """
     
     # create input and output features
     if encoding_method == 'std': 
         # TODO: remove 'next_move' in preprocessing
-        X = df.drop(columns=['next_move_encoded', 'next_move'])
+        X = df.drop(columns=['next_move_encoded'])
         y = df['next_move_encoded']
     elif encoding_method == 'vector':
         # grouping certain columns
@@ -35,27 +46,26 @@ def train_models(df, features_to_drop, encoding_method='std'):
         
         y = df[cols_to_keep].copy()
                 
-    for column in X.columns:
-        if column in features_to_drop:
-            X = X.drop(columns=[column])
     
-    print("DATAFRAME:\n", X)
     # split into test and train data
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
-    
-    # save test data to csv
     
     # separate boards from X_test
     Boards = X_test['board_pos']
     X_test = X_test.drop(columns=['board_pos'])
     X_train = X_train.drop(columns=['board_pos'])
     
+    # if folder doesn't exist then create
+    model_path = MODEL_PREFIX + str(model)
+    if not os.path.isdir(str(model_path)):
+        os.makedirs(str(model_path))
+    
     # Save to csv files for future use
-    X_test.to_csv(MODEL_PREFIX + 'X_test.csv', index=False)
-    y_test.to_csv(MODEL_PREFIX + 'y_test.csv', index=False)
-    y_train.to_csv(MODEL_PREFIX + 'y_train.csv', index=False)
-    X_train.to_csv(MODEL_PREFIX + 'X_train.csv', index=False)
-    Boards.to_csv(MODEL_PREFIX + 'Boards.csv', index=False)
+    X_test.to_csv(MODEL_PREFIX + str(model) + '/X_test.csv', index=False)
+    y_test.to_csv(MODEL_PREFIX + str(model) + '/y_test.csv', index=False)
+    y_train.to_csv(MODEL_PREFIX + str(model) + '/y_train.csv', index=False)
+    X_train.to_csv(MODEL_PREFIX + str(model) + '/X_train.csv', index=False)
+    Boards.to_csv(MODEL_PREFIX + str(model) + '/Boards.csv', index=False)
     
     
     # unique_classes = y_train.apply(lambda col: len(col.unique()))
@@ -71,16 +81,28 @@ def train_models(df, features_to_drop, encoding_method='std'):
     le = LabelEncoder()
     y_train = le.fit_transform(y_train)
     
-    # create model
-    gb = xgb.XGBClassifier(random_state=42)
-
     print("\nNOW TRAINING MODEL\n")
+
+    # create, train and save model
+    if model == 'gb':
+        # create model
+        gb = xgb.XGBClassifier(random_state=42, enable_categorical=True)
+        
+        # Train model with progress bar
+        gb.fit(X_train, y_train)
+              
+        # save model to file
+        dump(gb, MODEL_PREFIX + str(model) + '/gb.joblib')
+    elif model == 'ebm':
+        # create model
+        ebm = ExplainableBoostingClassifier(n_jobs=1)
+        
+        # train model (with progress bar)
+        ebm.fit(X_train, y_train)
+                
+        # save model to file
+        dump(ebm, MODEL_PREFIX + str(model) + '/ebm.joblib')
     
-    # fit model
-    gb.fit(X_train, y_train)
-    
-    # save model to file
-    dump(gb, MODEL_PREFIX + 'gb.joblib')
         
 def main():
     
@@ -88,7 +110,7 @@ def main():
     encoding_method = "std"
     
     # grab df from games.csv
-    df = pd.read_csv(DATA_PREFIX + 'lichess-2023-11-100k.csv')
+    df = pd.read_csv(DATA_PREFIX + 'tiny_test.csv')
     df['next_move_encoded'] = df['next_move_encoded'].astype('category')
     df['turn'] = df['turn'].astype('category')
     
@@ -96,8 +118,8 @@ def main():
     # OPTIONS: 'w_safety', 'b_safety', 'w_central', 'b_central', 'w_rating', 'b_rating', 'turn'
     features_to_drop = ['w_safety', 'b_safety', 'w_central', 'b_central', 'w_rating', 'b_rating', 'turn']
     
-    # train the models    
-    train_models(df, features_to_drop)
+    # train the models
+    train_models(df, 'gb')
     
 if __name__ == '__main__':
     main()

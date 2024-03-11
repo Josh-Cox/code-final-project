@@ -260,24 +260,6 @@ def UI_loop(boards, y_pred, y_test):
         pos = int(input("Please enter a number: "))
     
     
-def interpret_model():
-    # load trained model from file
-    model = load(PATH_PREFIX + 'gb.joblib')
-    X_test = pd.read_csv(PATH_PREFIX + 'X_test.csv')
-    y_train = pd.read_csv(PATH_PREFIX + 'y_train.csv')
-    
-    # Decode
-    le = LabelEncoder()
-    le.fit(y_train)
-    decoded_class_names = le.classes_
-    
-    explainer = shap.Explainer(model.predict, X_test)
-    shap_values = explainer(X_test[0:2])
-
-    feature_names_with_classes = X_test.columns.tolist() + decoded_class_names.tolist()
-
-    shap.waterfall_plot(shap.Explanation(values=shap_values[0], feature_names=X_test.columns.tolist(), class_names=decoded_class_names))
-    
 def main():
   
     
