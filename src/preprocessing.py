@@ -6,6 +6,7 @@ import time
 import re
 import numpy as np
 import pandas as pd
+from progress.bar import Bar
 
 # Global Constant Values
 MODEL_PREFIX = '../models/'
@@ -573,12 +574,14 @@ def generate_df(dbpath, k_safety_method, encode_method):
     #     game = chess.pgn.read_game(pgn)
     
     # create list of inputs
+    num_inputs = 100 # change this to determine number of games taken from input csv (must be smaller than number in file)
     inputs = []
-    for i in range (100_000):
-        singleInput = create_model_input(chess.pgn.read_game(pgn), k_safety_method)
-        if singleInput != None:
-            inputs.append(singleInput)
-        
+    with Bar('Preprocessing data...', max=num_inputs) as bar:
+        for i in range (num_inputs):
+            singleInput = create_model_input(chess.pgn.read_game(pgn), k_safety_method)
+            if singleInput != None:
+                inputs.append(singleInput)
+            bar.next()        
     
     columns = ["board_pos", "bitboard", "w_safety", "b_safety", "w_central", "b_central", "w_rating", "b_rating", "turn", "next_move"]
     
@@ -609,6 +612,9 @@ def generate_df(dbpath, k_safety_method, encode_method):
     # save to csv file
     df.to_csv(DATA_PREFIX + 'games.csv', index=False)
 
+def main():
+    generate_df('../data/lichess-2023-11', 'std', 'std')
     
+
 if __name__ == "__main__":
-    generate_df('../data/tiny_test.pgn', 'std', 'std')
+    main()

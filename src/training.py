@@ -2,6 +2,9 @@ from preprocessing import *
 from joblib import dump
 from tqdm import tqdm
 import os
+import time
+
+from progress.spinner import MoonSpinner
 
 from interpret import set_visualize_provider
 from interpret.provider import InlineProvider
@@ -79,10 +82,15 @@ def train_models(df, model, encoding_method='std'):
     
     # Encoding the data
     le = LabelEncoder()
-    y_train = le.fit_transform(y_train)
+    le.fit(y_train)
+    np.save('classes.npy', le.classes_)
+    y_train = le.transform(y_train)
     
-    print("\nNOW TRAINING MODEL\n")
 
+    start_time = time.time()
+
+    print(f'\n--- TRAINING {model.upper()} ---\n')
+    
     # create, train and save model
     if model == 'gb':
         # create model
@@ -90,12 +98,12 @@ def train_models(df, model, encoding_method='std'):
         
         # Train model with progress bar
         gb.fit(X_train, y_train)
-              
+            
         # save model to file
         dump(gb, MODEL_PREFIX + str(model) + '/gb.joblib')
     elif model == 'ebm':
         # create model
-        ebm = ExplainableBoostingClassifier(n_jobs=1)
+        ebm = ExplainableBoostingClassifier(n_jobs=50, interactions=0)
         
         # train model (with progress bar)
         ebm.fit(X_train, y_train)
@@ -103,23 +111,22 @@ def train_models(df, model, encoding_method='std'):
         # save model to file
         dump(ebm, MODEL_PREFIX + str(model) + '/ebm.joblib')
     
-        
+    end_time = time.time()
+    
+    print(f'\n--- FINISHED TRAINING ---\n--- TIME ELAPSED: {end_time - start_time} ---\n')
+    
 def main():
     
     # set encoding method
     encoding_method = "std"
     
     # grab df from games.csv
-    df = pd.read_csv(DATA_PREFIX + 'tiny_test.csv')
+    df = pd.read_csv(DATA_PREFIX + 'lichess-2023-11-100k.csv')
     df['next_move_encoded'] = df['next_move_encoded'].astype('category')
     df['turn'] = df['turn'].astype('category')
     
-    # list of features to drop
-    # OPTIONS: 'w_safety', 'b_safety', 'w_central', 'b_central', 'w_rating', 'b_rating', 'turn'
-    features_to_drop = ['w_safety', 'b_safety', 'w_central', 'b_central', 'w_rating', 'b_rating', 'turn']
-    
     # train the models
-    train_models(df, 'gb')
+    train_models(df, 'ebm')
     
 if __name__ == '__main__':
     main()

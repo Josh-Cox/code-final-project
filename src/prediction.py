@@ -13,7 +13,7 @@ from joblib import load
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.metrics import precision_recall_fscore_support
-from sklearn.metrics import accuracy_score, f1_score
+from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 from sklearn.preprocessing import LabelEncoder
 
 # path to model files (train_test_split and model joblibs)
@@ -82,7 +82,7 @@ def make_predictions_multi(boards):
     for row_moves in grouped_moves:
         print(row_moves)
     
-def make_predictions():
+def make_predictions(model_name):
     """
     Makes predictions using trained models and test data
 
@@ -91,10 +91,10 @@ def make_predictions():
     """
     
     # get test data from train_test_split
-    X_test = pd.read_csv(PATH_PREFIX + 'X_test.csv')
-    y_train = pd.read_csv(PATH_PREFIX + 'y_train.csv')
-    y_test = pd.read_csv(PATH_PREFIX + 'y_test.csv')
-    boards = pd.read_csv(PATH_PREFIX + 'Boards.csv')
+    X_test = pd.read_csv(PATH_PREFIX + str(model_name) + '/X_test.csv')
+    y_train = pd.read_csv(PATH_PREFIX + str(model_name) + '/y_train.csv')
+    y_test = pd.read_csv(PATH_PREFIX + str(model_name) + '/y_test.csv')
+    boards = pd.read_csv(PATH_PREFIX + str(model_name) + '/Boards.csv')
     
     # # extract features from test data
     # feature_names = X_test.columns
@@ -108,15 +108,23 @@ def make_predictions():
     # # sort the df by importance
     # feature_importance_df.sort_values(by='Importance', ascending=False)
     
-    # load trained model from file
-    model = load(PATH_PREFIX + 'gb.joblib')
+    if model_name == 'gb':
+        # load trained model from file
+        model = load(PATH_PREFIX + str(model_name) + '/' + str(model_name) + '.joblib')
+    elif model_name == 'ebm':
+        # load trained model from file
+        model = load(PATH_PREFIX + str(model_name) + '/' + str(model_name) + '.joblib')
     
     # make predictions with probabilities
     y_pred = model.predict(X_test)
     
-    # Decode
     le = LabelEncoder()
     le.fit(y_train)
+    
+    print("Unique labels in y_train:", np.unique(y_train))
+    print("Unique labels in y_test:", np.unique(y_test))
+
+    # le.classes_ = np.load('classes.npy')
     
     y_pred = le.inverse_transform(y_pred)
     
@@ -134,8 +142,9 @@ def make_predictions():
             filtered_boards.append(boards[i])
          
 
-    # print(accuracy_score(filtered_y_test, filtered_y_pred))
-    # print(f1_score(filtered_y_test, filtered_y_pred, average='weighted'))
+    print(accuracy_score(filtered_y_test, filtered_y_pred))
+    print(f1_score(filtered_y_test, filtered_y_pred, average='weighted'))
+    print(roc_auc_score(filtered_y_test, filtered_y_pred))
     
     # UI_loop(filtered_boards, filtered_y_pred, filtered_y_test)
     
@@ -264,7 +273,7 @@ def main():
   
     
     # make predictions
-    make_predictions()
+    make_predictions('ebm')
     
     # interpret the model
     # interpret_model()
