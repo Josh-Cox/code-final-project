@@ -91,10 +91,10 @@ def make_predictions(model_name):
     """
     
     # get test data from train_test_split
-    X_test = pd.read_csv(PATH_PREFIX + str(model_name) + '/X_test.csv')
-    y_train = pd.read_csv(PATH_PREFIX + str(model_name) + '/y_train.csv')
-    y_test = pd.read_csv(PATH_PREFIX + str(model_name) + '/y_test.csv')
-    boards = pd.read_csv(PATH_PREFIX + str(model_name) + '/Boards.csv')
+    X_test = pd.read_csv(PATH_PREFIX + str(model_name) + '/X_test_20k.csv')
+    y_train = pd.read_csv(PATH_PREFIX + str(model_name) + '/y_train_20k.csv')
+    y_test = pd.read_csv(PATH_PREFIX + str(model_name) + '/y_test_20k.csv')
+    boards = pd.read_csv(PATH_PREFIX + str(model_name) + '/Boards_20k.csv')
     
     # # extract features from test data
     # feature_names = X_test.columns
@@ -113,7 +113,7 @@ def make_predictions(model_name):
         model = load(PATH_PREFIX + str(model_name) + '/' + str(model_name) + '.joblib')
     elif model_name == 'ebm':
         # load trained model from file
-        model = load(PATH_PREFIX + str(model_name) + '/' + str(model_name) + '.joblib')
+        model = load(PATH_PREFIX + str(model_name) + '/' + str(model_name) + '_20k.joblib')
     
     # make predictions with probabilities
     y_pred = model.predict(X_test)
@@ -121,9 +121,6 @@ def make_predictions(model_name):
     le = LabelEncoder()
     le.fit(y_train)
     
-    print("Unique labels in y_train:", np.unique(y_train))
-    print("Unique labels in y_test:", np.unique(y_test))
-
     # le.classes_ = np.load('classes.npy')
     
     y_pred = le.inverse_transform(y_pred)
@@ -144,7 +141,7 @@ def make_predictions(model_name):
 
     print(accuracy_score(filtered_y_test, filtered_y_pred))
     print(f1_score(filtered_y_test, filtered_y_pred, average='weighted'))
-    print(roc_auc_score(filtered_y_test, filtered_y_pred))
+    # print(roc_auc_score(filtered_y_test, filtered_y_pred, multi_class='ovr'))
     
     # UI_loop(filtered_boards, filtered_y_pred, filtered_y_test)
     

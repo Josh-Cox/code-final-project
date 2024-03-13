@@ -574,7 +574,7 @@ def generate_df(dbpath, k_safety_method, encode_method):
     #     game = chess.pgn.read_game(pgn)
     
     # create list of inputs
-    num_inputs = 100 # change this to determine number of games taken from input csv (must be smaller than number in file)
+    num_inputs = 20_000 # change this to determine number of games taken from input csv (must be smaller than number in file)
     inputs = []
     with Bar('Preprocessing data...', max=num_inputs) as bar:
         for i in range (num_inputs):

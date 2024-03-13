@@ -1,7 +1,9 @@
 from training import *
 from prediction import *
+import argparse
 import matplotlib.pyplot as plt
 import os
+import time
 from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score
 from sklearn.preprocessing import StandardScaler
 
@@ -13,7 +15,21 @@ RESULTS_PREFIX = '../results/'
 
 ALL_FEATURES = ['w_safety', 'b_safety', 'w_central', 'b_central', 'w_rating', 'b_rating', 'turn']
 
-def train_model(df, model, features_to_drop, corr_feat=None, encoding_method='std'):
+# ARGUMENT HANDLING
+parser = argparse.ArgumentParser(description="Which functions to run on which model")
+parser.add_argument('-f', choices=['pca', 'feat_select'], required=True)
+parser.add_argument('-m', choices=['gb', 'ebm'])
+parser.add_argument('-e', choices=['std', 'binary', 'vector'], default='std')
+parser.add_argument
+args = parser.parse_args()
+
+
+# check that a model is specified if feat_select is chosen
+if args.f == 'feat_select' and args.m == None:
+    print("Please specify a model with '-m'")
+    exit()
+
+def train_model(df, model, features_to_use, encoding_method='std'):
     """
     Trains the model with the given dataframe and saves it to a .joblib file. Also saves train_test_split data
 
@@ -23,15 +39,16 @@ def train_model(df, model, features_to_drop, corr_feat=None, encoding_method='st
     :param encoding_method, default 'std': encoding method for next_move ['std', 'vector', 'binary']
     :param corr_feat: feature to test correlation of e.g. 'turn' (Must NOT be in features_to_drop)
     """
+    
+    # include board pos
+    features_to_use.append('board_pos')
+    
+    all_features = ['w_safety', 'b_safety', 'w_central', 'b_central', 'w_rating', 'b_rating', 'turn']
+    features_to_drop = [x for x in all_features if x not in features_to_use]    
             
-    # TODO: remove 'next_move' in preprocessing
-    X = df.drop(columns=['next_move_encoded', 'next_move'])
+    # Get features
+    X = df.drop(columns=features_to_drop)
     y = df['next_move_encoded']
-
-    # remove any unwanted columns
-    for column in X.columns:
-        if column in features_to_drop:
-            X = X.drop(columns=[column])
 
     # split into test and train data
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
@@ -44,7 +61,7 @@ def train_model(df, model, features_to_drop, corr_feat=None, encoding_method='st
     # get suffix for file names
     name = ""
     for feature in ALL_FEATURES:
-        if feature not in features_to_drop:
+        if feature in features_to_use:
             name += '-' + str(feature)
         
     # if folder doesn't exist then create
@@ -73,21 +90,39 @@ def train_model(df, model, features_to_drop, corr_feat=None, encoding_method='st
     le = LabelEncoder()
     y_train = le.fit_transform(y_train)
     
-    # create model
-    gb = xgb.XGBClassifier(random_state=42, enable_categorical=True)
-
-    print("\nTRAINING MODEL\n")
+    print("\n--- TRAINING MODEL ---\n")
     
-    # fit model
-    gb.fit(X_train, y_train)
+    seed = 42
+    np.random.seed(seed)
     
-    # save model to file
-    dump(gb, model_path + '/' + name + '.joblib')
+    start_time = time.time()
     
-    print("\nTESTING MODEL\n")
-
+    if model == 'gb':
+        # create model
+        gb = xgb.XGBClassifier(random_state=seed, enable_categorical=True)
+        
+        # fit model
+        gb.fit(X_train, y_train)
+        
+        # save model to file
+        dump(gb, model_path + '/' + name + '.joblib')
+    elif model == 'ebm':
+        # create model
+        ebm = ExplainableBoostingClassifier(random_state=seed, interactions=0)
+        
+        # fit model
+        ebm.fit(X_train, y_train)
+        
+        # save model to file
+        dump(ebm, model_path + '/' + name + '.joblib')
+        
+    end_time = time.time()
+    
+    print(f'\n--- FINISHED TRAINING ---\n\n--- TIME ELAPSED: {end_time-start_time} ---\n')
+    print("\n--- TESTING MODEL ---\n")
+    
     # test the model
-    test_model(model_path, data_path, results_path, name, corr_feat)
+    test_model(model_path, data_path, results_path, name, features_to_use)
 
 def test_model(model_path, data_path, results_path, name, corr_feat):
     """
@@ -161,8 +196,13 @@ def test_model(model_path, data_path, results_path, name, corr_feat):
             new_df = X_train[corr_feat].merge(y_train, left_index=True, right_index=True)
             corr_train = new_df.corr()
             f.write(f'Correlation of {corr_feat}: \n{corr_train}\n')
-
-def pca_analysis(df, model):
+            
+    print(f'Accuracy: {accuracy}\n')
+    print(f'Precision: {precision}\n')
+    print(f'Recall: {recall}\n')
+    print(f'F1-Score: {f1}\n')
+    
+def pca_analysis(df):
     # drop board pos
     
     df = df.drop(columns=['board_pos', 'next_move_encoded'])
@@ -183,7 +223,7 @@ def pca_analysis(df, model):
     
             
     # if folder doesn't exist then create
-    pca_path = MODEL_PREFIX + str(model)
+    pca_path = MODEL_PREFIX
     if not os.path.isdir(str(pca_path)):
         os.makedirs(str(pca_path))
     
@@ -202,25 +242,60 @@ def pca_analysis(df, model):
     plt.ylabel("Cumulative Explained Variance")
     plt.show()
 
-def main():  
-    # set encoding method
-    encoding_method = "std"
-    
-    # grab df from games.csv
-    df = pd.read_csv(DATA_PREFIX + 'lichess-2023-11-100k.csv')
-    # change datatypes to category where applicable
-    df['next_move_encoded'] = df['next_move_encoded'].astype('category')
-    df['turn'] = df['turn'].astype('category')
-    
-    # list of features to drop
-    # OPTIONS: 'w_safety', 'b_safety', 'w_central', 'b_central', 'w_rating', 'b_rating', 'turn'
-    features_to_drop = ['w_safety', 'b_safety', 'w_central', 'w_rating', 'b_rating']
-    
-    # train the model - remember to add corr_feat parameter if correlation evaluation wanted (see function docstring)
-    train_model(df, 'gb', features_to_drop, ['b_central', 'turn'])
-    
-    # PCA
-    # pca_analysis(df, 'gb')
+def main():
+    # check command line arguments
+    if args.f == "pca":
+        df = pd.read_csv(DATA_PREFIX + 'lichess-2023-11-100k.csv')
+            
+        # change datatypes to category where applicable
+        df['next_move_encoded'] = df['next_move_encoded'].astype('category')
+        df['turn'] = df['turn'].astype('category')
+        
+        pca_analysis(df)
+    else:
+        user_features = input("""
+Please enter the numbers of the features you want to use (e.g. 1467)\n
+w_rating:  1\n
+b_rating:  2\n
+w_central: 3\n
+b_central: 4\n
+w_safety:  5\n
+b_safety:  6\n
+turn:      7\n\n-> """)
+        
+        
+        # list of features to use
+        features = ['w_rating', 'b_rating', 'w_central', 'b_central', 'w_safety', 'b_safety', 'turn']
+        features_to_use = []
+        
+        # extract user picked features
+        user_features = str(user_features)
+        
+        # add feature if it is valid
+        for num in user_features:
+            if int(num) not in [1, 2, 3, 4, 5, 6, 7]:
+                print("Number invalid")
+                exit()
+            features_to_use.append(features[int(num)-1])
+                
+        # set encoding method
+        encoding_method = args.e
+        
+        # grab relative df from csv
+        if args.m == "ebm":
+            df = pd.read_csv(DATA_PREFIX + 'lichess-2023-11-1k.csv')
+        elif args.m == "gb":
+            df = pd.read_csv(DATA_PREFIX + 'lichess-2023-11-100k.csv')
+            
+        # change datatypes to category where applicable
+        df['next_move_encoded'] = df['next_move_encoded'].astype('category')
+        df['turn'] = df['turn'].astype('category')
+        
+        
+        # train the model - remember to add corr_feat parameter if correlation evaluation wanted (see function docstring)
+        train_model(df, args.m, features_to_use, encoding_method)
+
+    # speed_test(df)
 
     
 if __name__ == '__main__':

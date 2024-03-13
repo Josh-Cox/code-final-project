@@ -33,7 +33,6 @@ def train_models(df, model, encoding_method='std'):
     
     # create input and output features
     if encoding_method == 'std': 
-        # TODO: remove 'next_move' in preprocessing
         X = df.drop(columns=['next_move_encoded'])
         y = df['next_move_encoded']
     elif encoding_method == 'vector':
@@ -91,10 +90,13 @@ def train_models(df, model, encoding_method='std'):
 
     print(f'\n--- TRAINING {model.upper()} ---\n')
     
+    seed = 42
+    np.random.seed(seed)
+    
     # create, train and save model
     if model == 'gb':
         # create model
-        gb = xgb.XGBClassifier(random_state=42, enable_categorical=True)
+        gb = xgb.XGBClassifier(random_state=seed, enable_categorical=True)
         
         # Train model with progress bar
         gb.fit(X_train, y_train)
@@ -103,9 +105,9 @@ def train_models(df, model, encoding_method='std'):
         dump(gb, MODEL_PREFIX + str(model) + '/gb.joblib')
     elif model == 'ebm':
         # create model
-        ebm = ExplainableBoostingClassifier(n_jobs=50, interactions=0)
+        ebm = ExplainableBoostingClassifier(random_state=seed, n_jobs=-1, interactions=0)
         
-        # train model (with progress bar)
+        # train model
         ebm.fit(X_train, y_train)
                 
         # save model to file
@@ -120,8 +122,8 @@ def main():
     # set encoding method
     encoding_method = "std"
     
-    # grab df from games.csv
-    df = pd.read_csv(DATA_PREFIX + 'lichess-2023-11-100k.csv')
+    # grab df from csv
+    df = pd.read_csv(DATA_PREFIX + 'lichess-2023-11-100.csv')
     df['next_move_encoded'] = df['next_move_encoded'].astype('category')
     df['turn'] = df['turn'].astype('category')
     
