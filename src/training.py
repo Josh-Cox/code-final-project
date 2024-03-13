@@ -3,6 +3,7 @@ from joblib import dump
 from tqdm import tqdm
 import os
 import time
+import argparse
 
 from progress.spinner import MoonSpinner
 
@@ -21,6 +22,11 @@ set_visualize_provider(InlineProvider())
 
 DATA_PREFIX = '../data/'
 MODEL_PREFIX = '../models/'
+
+# ARGUMENT HANDLING
+parser = argparse.ArgumentParser(description="Model Selection")
+parser.add_argument('-m', choices=['gb', 'ebm'], required=True)
+args = parser.parse_args()
 
 def train_models(df, model, encoding_method='std'):
     """
@@ -128,7 +134,7 @@ def main():
     df['turn'] = df['turn'].astype('category')
     
     # train the models
-    train_models(df, 'ebm')
+    train_models(df, args.m)
     
 if __name__ == '__main__':
     main()

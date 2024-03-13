@@ -43,8 +43,7 @@ def train_model(df, model, features_to_use, encoding_method='std'):
     # include board pos
     features_to_use.append('board_pos')
     
-    all_features = ['w_safety', 'b_safety', 'w_central', 'b_central', 'w_rating', 'b_rating', 'turn']
-    features_to_drop = [x for x in all_features if x not in features_to_use]    
+    features_to_drop = [x for x in ALL_FEATURES if x not in features_to_use]    
             
     # Get features
     X = df.drop(columns=features_to_drop)

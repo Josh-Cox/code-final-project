@@ -8,6 +8,7 @@ import seaborn as sns
 import random
 import shap
 import xgboost as xgb
+import argparse
 
 from joblib import load
 from sklearn.model_selection import train_test_split
@@ -39,8 +40,10 @@ PROMOTION_DECODING_TABLE = {
     '4': 'q'
 }
 
-# initialize SHAP
-# shap.initjs()
+# ARGUMENT HANDLING
+parser = argparse.ArgumentParser(description="Model Selection")
+parser.add_argument('-m', choices=['gb', 'ebm'], required=True)
+args = parser.parse_args()
 
 def make_predictions_multi(boards):
         
@@ -91,10 +94,10 @@ def make_predictions(model_name):
     """
     
     # get test data from train_test_split
-    X_test = pd.read_csv(PATH_PREFIX + str(model_name) + '/X_test_20k.csv')
-    y_train = pd.read_csv(PATH_PREFIX + str(model_name) + '/y_train_20k.csv')
-    y_test = pd.read_csv(PATH_PREFIX + str(model_name) + '/y_test_20k.csv')
-    boards = pd.read_csv(PATH_PREFIX + str(model_name) + '/Boards_20k.csv')
+    X_test = pd.read_csv(PATH_PREFIX + str(model_name) + '/X_test.csv')
+    y_train = pd.read_csv(PATH_PREFIX + str(model_name) + '/y_train.csv')
+    y_test = pd.read_csv(PATH_PREFIX + str(model_name) + '/y_test.csv')
+    boards = pd.read_csv(PATH_PREFIX + str(model_name) + '/Boards.csv')
     
     # # extract features from test data
     # feature_names = X_test.columns
@@ -113,7 +116,7 @@ def make_predictions(model_name):
         model = load(PATH_PREFIX + str(model_name) + '/' + str(model_name) + '.joblib')
     elif model_name == 'ebm':
         # load trained model from file
-        model = load(PATH_PREFIX + str(model_name) + '/' + str(model_name) + '_20k.joblib')
+        model = load(PATH_PREFIX + str(model_name) + '/' + str(model_name) + '.joblib')
     
     # make predictions with probabilities
     y_pred = model.predict(X_test)
@@ -265,12 +268,11 @@ def UI_loop(boards, y_pred, y_test):
         print("Actual:", decode_std(y_test[pos]))
         pos = int(input("Please enter a number: "))
     
-    
 def main():
   
     
     # make predictions
-    make_predictions('ebm')
+    make_predictions(args.m)
     
     # interpret the model
     # interpret_model()
