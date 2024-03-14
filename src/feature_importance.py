@@ -1,33 +1,33 @@
-from training import *
-from prediction import *
-import argparse
-import matplotlib.pyplot as plt
 import os
 import time
-from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score
-from sklearn.preprocessing import StandardScaler
+import argparse
+import pandas as pd
+import numpy as np
 
+import matplotlib.pyplot as plt
+from joblib import dump, load
+import xgboost as xgb
+from prediction import is_legal
+
+from interpret import set_visualize_provider
+from interpret.provider import InlineProvider
+from interpret.glassbox import ExplainableBoostingClassifier
+from interpret import show
+
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder, scale
+from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score, roc_auc_score
 from sklearn.decomposition import PCA
+
+set_visualize_provider(InlineProvider())
+
 
 DATA_PREFIX = '../data/'
 MODEL_PREFIX = '../feature_importance/'
 RESULTS_PREFIX = '../results/'
 
 ALL_FEATURES = ['w_safety', 'b_safety', 'w_central', 'b_central', 'w_rating', 'b_rating', 'turn']
-
-# ARGUMENT HANDLING
-parser = argparse.ArgumentParser(description="Which functions to run on which model")
-parser.add_argument('-f', choices=['pca', 'feat_select'], required=True)
-parser.add_argument('-m', choices=['gb', 'ebm'])
-parser.add_argument('-e', choices=['std', 'binary', 'vector'], default='std')
-parser.add_argument
-args = parser.parse_args()
-
-
-# check that a model is specified if feat_select is chosen
-if args.f == 'feat_select' and args.m == None:
-    print("Please specify a model with '-m'")
-    exit()
 
 def train_model(df, model, features_to_use, encoding_method='std'):
     """
@@ -202,7 +202,6 @@ def test_model(model_path, data_path, results_path, name, corr_feat):
     print(f'F1-Score: {f1}\n')
     
 def pca_analysis(df):
-    # drop board pos
     
     df = df.drop(columns=['board_pos', 'next_move_encoded'])
     board_features = df.iloc[:, -64:]
@@ -213,12 +212,18 @@ def pca_analysis(df):
     scaler_board = StandardScaler()
     board_features_scaled = scaler_board.fit_transform(board_features)
     additional_features_scaled = scaler_board.fit_transform(additional_features)
+    # scaled_df = scaler_board.fit_transform(df)
     
-    # X_scaled = pd.DataFrame(data=np.hstack((board_features_scaled, additional_features_scaled)), columns=board_features.columns.tolist() + additional_features.columns.tolist())
+    X_scaled = pd.DataFrame(data=np.hstack((board_features_scaled, additional_features_scaled)), columns=board_features.columns.tolist() + additional_features.columns.tolist())
     
     # apply PCA
-    pca = PCA(n_components=0.95) # retain 95% of variance
-    X_pca = pca.fit_transform(additional_features_scaled)
+    pca = PCA(0.95) # retain 95% of variance
+    X_pca = pca.fit_transform(X_scaled)
+    
+    per_var = np.round(pca.explained_variance_ratio_ * 100, decimals=1)
+    prop_var = pca.explained_variance_ratio_
+    
+    labels = ['PC' + str(x) for x in range(1, len(per_var)+1)]
     
             
     # if folder doesn't exist then create
@@ -235,13 +240,38 @@ def pca_analysis(df):
             for feature_idx in top_feature_indices:
                 f.write(f"Feature {feature_idx}: {df.columns[feature_idx]}\n")
         
-    # plot
-    plt.plot(np.cumsum(pca.explained_variance_ratio_))
-    plt.xlabel("Number of components")
-    plt.ylabel("Cumulative Explained Variance")
+    # plot variance
+    plt.bar(x=range(1, len(per_var)+1), height=per_var, tick_label=labels)
+    plt.ylabel("Percentage of Explained Variance")
+    plt.xlabel("Principal Component")
+    plt.title("Scree Plot")
     plt.show()
+    
+    # plot PCA
+    # PC_number = np.arange(pca.n_components_) + 1
+    # plt.figure(figsize=(10, 6))
+    # plt.plot(PC_number, prop_var, 'ro-')
+    # plt.title("Scree Plot (Elbow Method)")
+    # plt.xlabel("Component Number")
+    # plt.ylabel("Proportion of Variance")
+    # plt.grid()
+    # plt.show()
 
 def main():
+    
+    # --- ARGUMENT HANDLING ---
+    parser = argparse.ArgumentParser(description="Which functions to run on which model")
+    parser.add_argument('-f', choices=['pca', 'feat_select'], required=True)
+    # parser.add_argument('-m', choices=['gb', 'ebm'], required=False)
+    # parser.add_argument('-e', choices=['std', 'binary', 'vector'], default='std')
+    args = parser.parse_args()
+
+        
+    # check that a model is specified if feat_select is chosen
+    if args.f == 'feat_select' and args.m == None:
+        print("Please specify a model with '-m'")
+        exit()
+        
     # check command line arguments
     if args.f == "pca":
         df = pd.read_csv(DATA_PREFIX + 'lichess-2023-11-100k.csv')

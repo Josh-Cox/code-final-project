@@ -40,11 +40,6 @@ PROMOTION_DECODING_TABLE = {
     '4': 'q'
 }
 
-# ARGUMENT HANDLING
-parser = argparse.ArgumentParser(description="Model Selection")
-parser.add_argument('-m', choices=['gb', 'ebm'], required=True)
-args = parser.parse_args()
-
 def make_predictions_multi(boards):
         
     # get test data from train_test_split
@@ -269,7 +264,10 @@ def UI_loop(boards, y_pred, y_test):
         pos = int(input("Please enter a number: "))
     
 def main():
-  
+    # ARGUMENT HANDLING
+    parser = argparse.ArgumentParser(description="Model Selection")
+    parser.add_argument('-m', choices=['gb', 'ebm'], required=True)
+    args = parser.parse_args()
     
     # make predictions
     make_predictions(args.m)
