@@ -4,8 +4,10 @@ import random
 import copy
 import time
 import re
+import os
 import numpy as np
 import pandas as pd
+import argparse
 from progress.bar import Bar
 
 # Global Constant Values
@@ -520,7 +522,14 @@ def create_model_input(game, k_safety_method, testing_move_number=-1):
     :param game: Game to create input from
     :param method: method for king safety evaluation (standard or exponential)
     :param testing_move_number: used for choosing a specific position instead of random (-1 is random pos)
-    """
+    """    
+    
+    # check game is not none
+    if game is None:
+        return -1
+    
+    if not re.search(r"600[^\d]", game.headers["TimeControl"]):
+        return None
     
     # get board position and next move
     temp = get_random_pos(game, testing_move_number)
@@ -552,7 +561,7 @@ def create_model_input(game, k_safety_method, testing_move_number=-1):
     
     return data
 
-def generate_df(dbpath, k_safety_method, encode_method):
+def generate_df(filename, num_inputs, k_safety_method, encode_method):
     """
     Main function that runs the preprocessing on the chess games database
     
@@ -560,6 +569,9 @@ def generate_df(dbpath, k_safety_method, encode_method):
     :param k_safety_method: method for evaluating king safety (standard or exponential)
     :param encode-method: method for encoding next move (value, binary, binary + vector)
     """
+    
+    # set the file path
+    dbpath = f'../data/{filename}'
     
     # access games database
     pgn = open(dbpath)
@@ -574,14 +586,21 @@ def generate_df(dbpath, k_safety_method, encode_method):
     #     game = chess.pgn.read_game(pgn)
     
     # create list of inputs
-    num_inputs = 20_000 # change this to determine number of games taken from input csv (must be smaller than number in file)
+
     inputs = []
+    
+    # set count for number of inputs
+    count = 0
     with Bar('Preprocessing data...', max=num_inputs) as bar:
-        for i in range (num_inputs):
+        while count < num_inputs:
             singleInput = create_model_input(chess.pgn.read_game(pgn), k_safety_method)
+            if singleInput == -1:
+                print("\nNo more games in file, exiting")
+                break
             if singleInput != None:
                 inputs.append(singleInput)
-            bar.next()        
+                count += 1
+                bar.next()
     
     columns = ["board_pos", "bitboard", "w_safety", "b_safety", "w_central", "b_central", "w_rating", "b_rating", "turn", "next_move"]
     
@@ -609,11 +628,27 @@ def generate_df(dbpath, k_safety_method, encode_method):
     # drop next_move column
     df.drop(columns=['next_move'], inplace=True)
     
+    # remove extenion from filename is needed
+    if filename.endswith('.pgn'):
+        filename = filename[:-4]
+    
     # save to csv file
-    df.to_csv(DATA_PREFIX + 'games.csv', index=False)
+    df.to_csv(DATA_PREFIX + f'{filename}.csv', index=False)
 
 def main():
-    generate_df('../data/lichess-2023-11', 'std', 'std')
+    # ARGUMENT HANDLING
+    parser = argparse.ArgumentParser(description="Model Selection")
+    parser.add_argument('-f', type=str, required=True, help="Name of file to process (including any extensions)")
+    parser.add_argument('-n', type=int, required=True, help='Number of inputs to use')
+    args = parser.parse_args()
+    
+    # check if given filename exists
+    if not os.path.isfile(f'../data/{args.f}'):
+        print("ERROR: File not found")
+        exit()
+    
+    
+    generate_df(args.f, args.n, 'std', 'std')
     
 
 if __name__ == "__main__":

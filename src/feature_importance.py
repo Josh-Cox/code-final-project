@@ -206,7 +206,7 @@ def test_model(model_path, data_path, results_path, name, corr_feat):
 def pca_analysis(df, plot_type):
     
     # TODO: Remove next_move in preprocessing
-    X = df.drop(columns=['next_move_encoded', 'next_move'])
+    X = df.drop(columns=['next_move_encoded'])
     y = df[['next_move_encoded']]
     
     # board_features = df.iloc[:, -64:]
