@@ -24,8 +24,10 @@ set_visualize_provider(InlineProvider())
 
 
 DATA_PREFIX = '../data/'
-MODEL_PREFIX = '../feature_importance/'
+FEATURE_PREFIX = '../feature_importance/'
 RESULTS_PREFIX = '../results/'
+PCA_PREFIX = '../PCA/'
+
 
 ALL_FEATURES = ['w_safety', 'b_safety', 'w_central', 'b_central', 'w_rating', 'b_rating', 'turn']
 
@@ -64,17 +66,17 @@ def train_model(df, model, features_to_use, encoding_method='std'):
             name += '-' + str(feature)
         
     # if folder doesn't exist then create
-    data_path = MODEL_PREFIX + str(model) + '/data'
+    data_path = FEATURE_PREFIX + str(model) + '/data'
     if not os.path.isdir(str(data_path)):
         os.makedirs(str(data_path))
         
     # if folder doesn't exist then create
-    model_path = MODEL_PREFIX + str(model) + '/model'
+    model_path = FEATURE_PREFIX + str(model) + '/model'
     if not os.path.isdir(str(model_path)):
         os.makedirs(str(model_path))
         
     # if folder doesn't exist then create
-    results_path = MODEL_PREFIX + str(model) + '/results'
+    results_path = FEATURE_PREFIX + str(model) + '/results'
     if not os.path.isdir(str(results_path)):
         os.makedirs(str(results_path))
     
@@ -201,128 +203,177 @@ def test_model(model_path, data_path, results_path, name, corr_feat):
     print(f'Recall: {recall}\n')
     print(f'F1-Score: {f1}\n')
     
-def pca_analysis(df):
+def pca_analysis(df, plot_type):
     
-    df = df.drop(columns=['board_pos', 'next_move_encoded'])
-    board_features = df.iloc[:, -64:]
+    # TODO: Remove next_move in preprocessing
+    X = df.drop(columns=['next_move_encoded', 'next_move'])
+    y = df[['next_move_encoded']]
     
-    additional_features = df[['w_safety', 'b_safety', 'w_central', 'b_central', 'w_rating', 'b_rating', 'turn']]
+    # board_features = df.iloc[:, -64:]
+    # additional_features = df[['w_safety', 'b_safety', 'w_central', 'b_central', 'w_rating', 'b_rating', 'turn']]
+    
+    # split the data into training and testing    
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+    
+    # grab board
+    Boards = X_test[['board_pos']]
+    X_test = X_test.drop(columns=['board_pos'])
+    X_train = X_train.drop(columns=['board_pos'])
     
     # standardise
-    scaler_board = StandardScaler()
-    board_features_scaled = scaler_board.fit_transform(board_features)
-    additional_features_scaled = scaler_board.fit_transform(additional_features)
-    # scaled_df = scaler_board.fit_transform(df)
+    scaler = StandardScaler()
+    # board_features_scaled = scaler_board.fit_transform(board_features)
+    # additional_features_scaled = scaler_board.fit_transform(additional_features)
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
     
-    X_scaled = pd.DataFrame(data=np.hstack((board_features_scaled, additional_features_scaled)), columns=board_features.columns.tolist() + additional_features.columns.tolist())
+    # X_scaled = pd.DataFrame(data=np.hstack((board_features_scaled, additional_features_scaled)), columns=board_features.columns.tolist() + additional_features.columns.tolist())
     
     # apply PCA
     pca = PCA(0.95) # retain 95% of variance
-    X_pca = pca.fit_transform(X_scaled)
-    
+    X_train_pca = pca.fit_transform(X_train_scaled)
+    X_test_pca = pca.transform(X_test_scaled)
+
+    # variance for bar and elbow plot
     per_var = np.round(pca.explained_variance_ratio_ * 100, decimals=1)
     prop_var = pca.explained_variance_ratio_
     
+    # labels for plot
     labels = ['PC' + str(x) for x in range(1, len(per_var)+1)]
     
-            
     # if folder doesn't exist then create
-    pca_path = MODEL_PREFIX
+    if not os.path.isdir(str(PCA_PREFIX)):
+        os.makedirs(str(PCA_PREFIX))
+        
+    if plot_type == 'bar':
+        # plot variance
+        plt.bar(x=range(1, len(per_var)+1), height=per_var, tick_label=labels)
+        plt.ylabel("Percentage of Explained Variance")
+        plt.xlabel("Principal Component")
+        plt.title("Scree Plot")
+        plt.show()
+    else:
+        # plot PCA
+        PC_number = np.arange(pca.n_components_) + 1
+        plt.figure(figsize=(10, 6))
+        plt.plot(PC_number, prop_var, 'ro-')
+        plt.title("Scree Plot (Elbow Method)")
+        plt.xlabel("Component Number")
+        plt.ylabel("Proportion of Variance")
+        plt.grid()
+        plt.show()
+    
+    # number of components to use
+    num_comps = input(f'\nEnter the number of components to save (MAX={pca.n_components_}): ')
+    num_comps = int(num_comps)
+    
+    # check number given is valid, if not set to max or min
+    if num_comps > pca.n_components_:
+        print(f'ERROR: Number of components invalid.\nSetting to MAX={pca.n_components_}')
+        num_comps = pca.n_components_
+    elif num_comps <= 0:
+        print(f'ERROR: Number of components invalid.\nSetting to MIN=1')
+        num_comps = 1
+
+
+    # get correct number of components
+    pca_train = X_train_pca[:, :num_comps]
+    pca_test = X_test_pca[:, :num_comps]
+    
+    # generate dataframe
+    df_train = pd.DataFrame(pca_train, columns=[f'PC{i+1}' for i in range(num_comps)])
+    df_test = pd.DataFrame(pca_test, columns=[f'PC{i+1}' for i in range(num_comps)])
+    
+    # if folder doesn't exist then create
+    pca_path = PCA_PREFIX + str(num_comps) + '/'
     if not os.path.isdir(str(pca_path)):
         os.makedirs(str(pca_path))
     
-    # write to file
-    with open(pca_path + '/pca.txt', 'w') as f:
-        for component_idx, component in enumerate(pca.components_):
-            top_feature_indices = component.argsort()[-5:][::-1] 
+    # Save to csv files for future use (predictions)
+    y_test.to_csv(pca_path + 'y_test.csv', index=False)
+    y_train.to_csv(pca_path + 'y_train.csv', index=False)
+    Boards.to_csv(pca_path + 'Boards.csv', index=False)
+    df_train.to_csv(pca_path + f'X_pca_train.csv', index=False)
+    df_test.to_csv(pca_path + f'X_pca_test.csv', index=False)
 
-            f.write(f"\nTop features for Principal Component {component_idx + 1}:\n")
-            for feature_idx in top_feature_indices:
-                f.write(f"Feature {feature_idx}: {df.columns[feature_idx]}\n")
-        
-    # plot variance
-    plt.bar(x=range(1, len(per_var)+1), height=per_var, tick_label=labels)
-    plt.ylabel("Percentage of Explained Variance")
-    plt.xlabel("Principal Component")
-    plt.title("Scree Plot")
-    plt.show()
-    
-    # plot PCA
-    # PC_number = np.arange(pca.n_components_) + 1
-    # plt.figure(figsize=(10, 6))
-    # plt.plot(PC_number, prop_var, 'ro-')
-    # plt.title("Scree Plot (Elbow Method)")
-    # plt.xlabel("Component Number")
-    # plt.ylabel("Proportion of Variance")
-    # plt.grid()
-    # plt.show()
 
 def main():
     
+    # def check_component_number(num):
+    #     if type(num) is int and num < 
+    
     # --- ARGUMENT HANDLING ---
-    parser = argparse.ArgumentParser(description="Which functions to run on which model")
-    parser.add_argument('-f', choices=['pca', 'feat_select'], required=True)
-    # parser.add_argument('-m', choices=['gb', 'ebm'], required=False)
+    parser = argparse.ArgumentParser(description="Which functions/plots to run on")
+    parser.add_argument('-p', choices=['bar', 'elbow'], required=True)
+    parser.add_argument('-f', type=str, required=True)
     # parser.add_argument('-e', choices=['std', 'binary', 'vector'], default='std')
     args = parser.parse_args()
-
-        
-    # check that a model is specified if feat_select is chosen
-    if args.f == 'feat_select' and args.m == None:
-        print("Please specify a model with '-m'")
+    
+    # check if given filename exists
+    if not os.path.isfile(DATA_PREFIX + args.f + '.csv'):
+        print("ERROR: File not found")
         exit()
-        
+    
+    df = pd.read_csv(DATA_PREFIX + args.f + '.csv')
+            
+    # change datatypes to category where applicable
+    df['next_move_encoded'] = df['next_move_encoded'].astype('category')
+    df['turn'] = df['turn'].astype('category')
+    
+    # call pca with given plot type (-p)
+    pca_analysis(df, args.p)
+            
     # check command line arguments
-    if args.f == "pca":
-        df = pd.read_csv(DATA_PREFIX + 'lichess-2023-11-100k.csv')
+#     if args.f == "pca":
+#         df = pd.read_csv(DATA_PREFIX + 'lichess-2023-11-100k.csv')
             
-        # change datatypes to category where applicable
-        df['next_move_encoded'] = df['next_move_encoded'].astype('category')
-        df['turn'] = df['turn'].astype('category')
+#         # change datatypes to category where applicable
+#         df['next_move_encoded'] = df['next_move_encoded'].astype('category')
+#         df['turn'] = df['turn'].astype('category')
         
-        pca_analysis(df)
-    else:
-        user_features = input("""
-Please enter the numbers of the features you want to use (e.g. 1467)\n
-w_rating:  1\n
-b_rating:  2\n
-w_central: 3\n
-b_central: 4\n
-w_safety:  5\n
-b_safety:  6\n
-turn:      7\n\n-> """)
+#         pca_analysis(df)
+#     else:
+#         user_features = input("""
+# Please enter the numbers of the features you want to use (e.g. 1467)\n
+# w_rating:  1\n
+# b_rating:  2\n
+# w_central: 3\n
+# b_central: 4\n
+# w_safety:  5\n
+# b_safety:  6\n
+# turn:      7\n\n-> """)
         
         
-        # list of features to use
-        features = ['w_rating', 'b_rating', 'w_central', 'b_central', 'w_safety', 'b_safety', 'turn']
-        features_to_use = []
+#         # list of features to use
+#         features = ['w_rating', 'b_rating', 'w_central', 'b_central', 'w_safety', 'b_safety', 'turn']
+#         features_to_use = []
         
-        # extract user picked features
-        user_features = str(user_features)
+#         # extract user picked features
+#         user_features = str(user_features)
         
-        # add feature if it is valid
-        for num in user_features:
-            if int(num) not in [1, 2, 3, 4, 5, 6, 7]:
-                print("Number invalid")
-                exit()
-            features_to_use.append(features[int(num)-1])
+#         # add feature if it is valid
+#         for num in user_features:
+#             if int(num) not in [1, 2, 3, 4, 5, 6, 7]:
+#                 print("Number invalid")
+#                 exit()
+#             features_to_use.append(features[int(num)-1])
                 
-        # set encoding method
-        encoding_method = args.e
+#         # set encoding method
+#         encoding_method = args.e
         
-        # grab relative df from csv
-        if args.m == "ebm":
-            df = pd.read_csv(DATA_PREFIX + 'lichess-2023-11-1k.csv')
-        elif args.m == "gb":
-            df = pd.read_csv(DATA_PREFIX + 'lichess-2023-11-100k.csv')
+#         # grab relative df from csv
+#         if args.m == "ebm":
+#             df = pd.read_csv(DATA_PREFIX + 'lichess-2023-11-1k.csv')
+#         elif args.m == "gb":
+#             df = pd.read_csv(DATA_PREFIX + 'lichess-2023-11-100k.csv')
             
-        # change datatypes to category where applicable
-        df['next_move_encoded'] = df['next_move_encoded'].astype('category')
-        df['turn'] = df['turn'].astype('category')
+#         # change datatypes to category where applicable
+#         df['next_move_encoded'] = df['next_move_encoded'].astype('category')
+#         df['turn'] = df['turn'].astype('category')
         
         
-        # train the model - remember to add corr_feat parameter if correlation evaluation wanted (see function docstring)
-        train_model(df, args.m, features_to_use, encoding_method)
+#         # train the model - remember to add corr_feat parameter if correlation evaluation wanted (see function docstring)
+#         train_model(df, args.m, features_to_use, encoding_method)
 
     # speed_test(df)
 

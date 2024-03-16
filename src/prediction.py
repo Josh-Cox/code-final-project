@@ -9,16 +9,17 @@ import random
 import shap
 import xgboost as xgb
 import argparse
+import os
 
 from joblib import load
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import GradientBoostingClassifier
-from sklearn.metrics import precision_recall_fscore_support
-from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
+from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, precision_score, recall_score
 from sklearn.preprocessing import LabelEncoder
 
 # path to model files (train_test_split and model joblibs)
 PATH_PREFIX = '../models/'
+PCA_PREFIX = '../PCA/'
 
 # global table to decode chess moves
 DECODING_TABLE = {
@@ -39,6 +40,7 @@ PROMOTION_DECODING_TABLE = {
     '3': 'b',
     '4': 'q'
 }
+
 
 def make_predictions_multi(boards):
         
@@ -80,7 +82,7 @@ def make_predictions_multi(boards):
     for row_moves in grouped_moves:
         print(row_moves)
     
-def make_predictions(model_name):
+def make_predictions(model_name, folder):
     """
     Makes predictions using trained models and test data
 
@@ -88,38 +90,40 @@ def make_predictions(model_name):
     :param board: board positions to check for legal moves
     """
     
+    model_path = PATH_PREFIX + str(model_name) + '/model/'
+    
+    # check if model exists
+    if not os.path.isfile(model_path + str(model_name) + '_' + str(folder) + '.joblib'):
+        print("ERROR: No trained model exists. Train using python training.py")
+        exit()
+    
     # get test data from train_test_split
-    X_test = pd.read_csv(PATH_PREFIX + str(model_name) + '/X_test.csv')
-    y_train = pd.read_csv(PATH_PREFIX + str(model_name) + '/y_train.csv')
-    y_test = pd.read_csv(PATH_PREFIX + str(model_name) + '/y_test.csv')
-    boards = pd.read_csv(PATH_PREFIX + str(model_name) + '/Boards.csv')
+    X_test = pd.read_csv(PCA_PREFIX + str(folder) + '/X_pca_test.csv')
+    X_train = pd.read_csv(PCA_PREFIX + str(folder) + '/X_pca_train.csv')
+    y_train = pd.read_csv(PCA_PREFIX + str(folder) + '/y_train.csv')
+    y_test = pd.read_csv(PCA_PREFIX + str(folder) + '/y_test.csv')
+    boards = pd.read_csv(PCA_PREFIX + str(folder) + '/Boards.csv')
     
-    # # extract features from test data
-    # feature_names = X_test.columns
+    print("\n--- MAKING PREDICTIONS ---")
     
-    # # feature importance
-    # feature_importances = model.feature_importances_
+    # start time for predicting
+    start_time = time.time()
     
-    # # df of features and their importance
-    # feature_importance_df = pd.DataFrame({'Feature': feature_names, 'Importance': feature_importances})
-    
-    # # sort the df by importance
-    # feature_importance_df.sort_values(by='Importance', ascending=False)
-    
-    if model_name == 'gb':
-        # load trained model from file
-        model = load(PATH_PREFIX + str(model_name) + '/' + str(model_name) + '.joblib')
-    elif model_name == 'ebm':
-        # load trained model from file
-        model = load(PATH_PREFIX + str(model_name) + '/' + str(model_name) + '.joblib')
-    
+    # load trained model from file
+    model = load(model_path + str(model_name) + '_' + str(folder) + '.joblib')
+
     # make predictions with probabilities
     y_pred = model.predict(X_test)
     
-    le = LabelEncoder()
-    le.fit(y_train)
+    # end time for predicting
+    end_time = time.time()
     
-    # le.classes_ = np.load('classes.npy')
+    print("\n--- FINISHED PREDICTIONS ---")
+    print(f'\n--- TIME ELAPSED: {end_time - start_time} ---\n')
+    
+    # setup label encoder
+    le = LabelEncoder()
+    le.classes_ = np.load('classes.npy')
     
     y_pred = le.inverse_transform(y_pred)
     
@@ -136,11 +140,29 @@ def make_predictions(model_name):
             filtered_y_test.append(y_test[i])
             filtered_boards.append(boards[i])
          
+    precision = precision_score(filtered_y_test, filtered_y_pred, average='weighted', zero_division=0)
+    recall = recall_score(filtered_y_test, filtered_y_pred, average='weighted', zero_division=0)
+    f1 = f1_score(filtered_y_test, filtered_y_pred, average='weighted')
+    accuracy = accuracy_score(filtered_y_test, filtered_y_pred)
 
-    print(accuracy_score(filtered_y_test, filtered_y_pred))
-    print(f1_score(filtered_y_test, filtered_y_pred, average='weighted'))
-    # print(roc_auc_score(filtered_y_test, filtered_y_pred, multi_class='ovr'))
-    
+    # if folder doesn't exist then create
+    results_path = PATH_PREFIX + '/' + str(model_name) + '/results/'
+    if not os.path.isdir(str(results_path)):
+        os.makedirs(str(results_path))
+
+    # write to file
+    with open(results_path + str(model_name) + '_' + str(folder) + '.txt', 'w') as f:
+        f.write(f'Precision: {precision:.2f}\n')
+        f.write(f'Recall: {recall:.2f}\n')
+        f.write(f'F1-Score: {f1:.2f}\n')
+        f.write(f'Accuracy: {accuracy:.2f}\n')
+        
+    # print results
+    print(f'Precision: {precision:.2f}\n')
+    print(f'Recall: {recall:.2f}\n')
+    print(f'F1-Score: {f1:.2f}\n')
+    print(f'Accuracy: {accuracy:.2f}\n')
+            
     # UI_loop(filtered_boards, filtered_y_pred, filtered_y_test)
     
     return [filtered_y_test, filtered_y_pred, filtered_boards]
@@ -181,7 +203,7 @@ def is_legal(board, move, method="std"):
     
     :returns: True or False if move is legal or not respectively
     """
-    
+        
     # check encoding method used
     if method == "std":
         
@@ -202,8 +224,6 @@ def is_legal(board, move, method="std"):
         if move[0] == move[2] and move[1] == move[3]: return False
 
     
-        # decode (only decoding 1st and 3rd chars as numbers aren't changed E.g. e5d7 == 5547)
-        new_str = decode_std(move)
         
         # if move includes a promotion
         if len(move) >= 5:
@@ -213,8 +233,8 @@ def is_legal(board, move, method="std"):
                 return False
             
             
-            # encode last char
-            new_str += PROMOTION_DECODING_TABLE[move[4]]
+        # decode (only decoding 1st and 3rd chars as numbers aren't changed E.g. e5d7 == 5547)
+        new_str = decode_std(move)
             
         # convert move to python-chess move format
         new_move = chess.Move.from_uci(new_str)
@@ -267,10 +287,17 @@ def main():
     # ARGUMENT HANDLING
     parser = argparse.ArgumentParser(description="Model Selection")
     parser.add_argument('-m', choices=['gb', 'ebm'], required=True)
+    parser.add_argument('-n', required=True, help='Number of components to train with (E.g. "10", "20") (Folder must exist under "PCA/")')
     args = parser.parse_args()
     
+    # check if given filename exists
+    # if not os.path.isfile(DATA_PREFIX + args.f + '.csv'):
+    #     print("ERROR: File not found")
+    #     exit()
+    
+    
     # make predictions
-    make_predictions(args.m)
+    make_predictions(args.m, args.n)
     
     # interpret the model
     # interpret_model()

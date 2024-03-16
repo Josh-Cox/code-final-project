@@ -22,13 +22,9 @@ set_visualize_provider(InlineProvider())
 
 DATA_PREFIX = '../data/'
 MODEL_PREFIX = '../models/'
+PCA_PREFIX = '../PCA/'
 
-# ARGUMENT HANDLING
-parser = argparse.ArgumentParser(description="Model Selection")
-parser.add_argument('-m', choices=['gb', 'ebm'], required=True)
-args = parser.parse_args()
-
-def train_models(df, model, encoding_method='std'):
+def train_models(model, folder, encoding_method='std'):
     """
     Trains the models with the given dataframe and saves it to a .joblib file. Also saves X_test to csv file.
 
@@ -38,43 +34,38 @@ def train_models(df, model, encoding_method='std'):
     """
     
     # create input and output features
-    if encoding_method == 'std': 
-        X = df.drop(columns=['next_move_encoded'])
-        y = df['next_move_encoded']
-    elif encoding_method == 'vector':
-        # grouping certain columns
-        additional_cols = ['columns_moved', 'ranks_moved']
-        start_pos_cols = [col for col in df.columns if len(col) == 1]
+    # if encoding_method == 'std': 
+    #     X = df.drop(columns=['next_move_encoded'])
+    #     y = df['next_move_encoded']
+    # elif encoding_method == 'vector':
+    #     # grouping certain columns
+    #     additional_cols = ['columns_moved', 'ranks_moved']
+    #     start_pos_cols = [col for col in df.columns if len(col) == 1]
         
-        # get columns to keep and drop
-        cols_to_drop = additional_cols + ['board_pos','promote_q', 'promote_r', 'promote_n', 'promote_b'] + start_pos_cols
-        cols_to_keep = start_pos_cols + additional_cols
+    #     # get columns to keep and drop
+    #     cols_to_drop = additional_cols + ['board_pos','promote_q', 'promote_r', 'promote_n', 'promote_b'] + start_pos_cols
+    #     cols_to_keep = start_pos_cols + additional_cols
         
-        X = df.drop(columns=cols_to_drop)
+    #     X = df.drop(columns=cols_to_drop)
         
-        y = df[cols_to_keep].copy()
+    #     y = df[cols_to_keep].copy()
+    
+    # check if given folder exists
+    if not os.path.isdir(str(PCA_PREFIX + folder)):
+        print("ERROR: Folder not found")
+        exit()
                 
-    
-    # split into test and train data
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
-    
-    # separate boards from X_test
-    Boards = X_test['board_pos']
-    X_test = X_test.drop(columns=['board_pos'])
-    X_train = X_train.drop(columns=['board_pos'])
+    # get test data from train_test_split
+    X_test = pd.read_csv(PCA_PREFIX + f'{folder}/X_pca_test.csv')
+    X_train = pd.read_csv(PCA_PREFIX + f'{folder}/X_pca_train.csv')
+    y_train = pd.read_csv(PCA_PREFIX + f'{folder}/y_train.csv')
+    y_test = pd.read_csv(PCA_PREFIX + f'{folder}/y_test.csv')
+    boards = pd.read_csv(PCA_PREFIX + f'{folder}/Boards.csv')
     
     # if folder doesn't exist then create
-    model_path = MODEL_PREFIX + str(model)
+    model_path = MODEL_PREFIX + str(model) + '/model/'
     if not os.path.isdir(str(model_path)):
         os.makedirs(str(model_path))
-    
-    # Save to csv files for future use
-    X_test.to_csv(MODEL_PREFIX + str(model) + '/X_test.csv', index=False)
-    y_test.to_csv(MODEL_PREFIX + str(model) + '/y_test.csv', index=False)
-    y_train.to_csv(MODEL_PREFIX + str(model) + '/y_train.csv', index=False)
-    X_train.to_csv(MODEL_PREFIX + str(model) + '/X_train.csv', index=False)
-    Boards.to_csv(MODEL_PREFIX + str(model) + '/Boards.csv', index=False)
-    
     
     # unique_classes = y_train.apply(lambda col: len(col.unique()))
     # columns_with_multiple_classes = unique_classes[unique_classes > 1].index
@@ -91,11 +82,12 @@ def train_models(df, model, encoding_method='std'):
     np.save('classes.npy', le.classes_)
     y_train = le.transform(y_train)
     
-
+    # start time of training
     start_time = time.time()
 
-    print(f'\n--- TRAINING {model.upper()} ---\n')
+    print(f'\n--- TRAINING {model.upper()} ---')
     
+    # set random seed for models
     seed = 42
     np.random.seed(seed)
     
@@ -108,7 +100,7 @@ def train_models(df, model, encoding_method='std'):
         gb.fit(X_train, y_train)
             
         # save model to file
-        dump(gb, MODEL_PREFIX + str(model) + '/gb.joblib')
+        dump(gb, model_path + f'gb_{folder}.joblib')
     elif model == 'ebm':
         # create model
         ebm = ExplainableBoostingClassifier(random_state=seed, n_jobs=-1, interactions=0)
@@ -117,24 +109,34 @@ def train_models(df, model, encoding_method='std'):
         ebm.fit(X_train, y_train)
                 
         # save model to file
-        dump(ebm, MODEL_PREFIX + str(model) + '/ebm.joblib')
+        dump(ebm, model_path + f'ebm_{folder}.joblib')
     
+    # end time for training model
     end_time = time.time()
     
-    print(f'\n--- FINISHED TRAINING ---\n--- TIME ELAPSED: {end_time - start_time} ---\n')
+    print(f'\n--- FINISHED TRAINING ---\n\n--- TIME ELAPSED: {end_time - start_time} ---\n')
     
 def main():
+    
+    # ARGUMENT HANDLING
+    parser = argparse.ArgumentParser(description="Model Selection")
+    parser.add_argument('-m', choices=['gb', 'ebm'], required=True, help='Model Selection')
+    parser.add_argument('-n', required=True, help='Number of components to train with (E.g. "10", "20") (Folder must exist under "PCA/")')
+    args = parser.parse_args()
     
     # set encoding method
     encoding_method = "std"
     
-    # grab df from csv
-    df = pd.read_csv(DATA_PREFIX + 'lichess-2023-11-100.csv')
-    df['next_move_encoded'] = df['next_move_encoded'].astype('category')
-    df['turn'] = df['turn'].astype('category')
+    # # grab df from csv
+    # df = pd.read_csv(file_path)
+    # df['next_move_encoded'] = df['next_move_encoded'].astype('category')
+    # df['turn'] = df['turn'].astype('category')
+    
+    # TODO: Remove this in preprocessing
+    # df = df.drop(columns=['next_move'])
     
     # train the models
-    train_models(df, args.m)
+    train_models(args.m, args.n)
     
 if __name__ == '__main__':
     main()
