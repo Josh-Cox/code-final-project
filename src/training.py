@@ -1,9 +1,10 @@
-from preprocessing import *
 from joblib import dump
 from tqdm import tqdm
 import os
 import time
 import argparse
+import pandas as pd
+import numpy as np
 
 from progress.spinner import MoonSpinner
 
@@ -102,14 +103,45 @@ def train_models(model, folder, encoding_method='std'):
         # save model to file
         dump(gb, model_path + f'gb_{folder}.joblib')
     elif model == 'ebm':
-        # create model
-        ebm = ExplainableBoostingClassifier(random_state=seed, n_jobs=-1, interactions=0)
         
-        # train model
-        ebm.fit(X_train, y_train)
+        num_batches = 5  # Adjust the number of batches as needed
+
+        # Calculate the batch size
+        batch_size = len(X_train) // num_batches
+        remainder = len(X_train) % num_batches
+        if remainder != 0:
+            batch_size += 1
+
+        # Create the model outside the loop
+        ebm = ExplainableBoostingClassifier(random_state=seed, n_jobs=-2, interactions=0)
+
+        for i in range(num_batches):
+            batch_start = time.time()
+            
+            start_idx = i * batch_size
+            end_idx = min((i + 1) * batch_size, len(X_train))
+            
+            X_batch = X_train[start_idx:end_idx]
+            y_batch = y_train[start_idx:end_idx]
+
+            # Train model on each batch sequentially
+            ebm.fit(X_batch, y_batch)
+            
+            batch_end = time.time()
+            print(f'\n--- BATCH {i} COMPLETED ---')
+            print(f'\n--- TIME ELAPSED: {batch_end - batch_start} ---')
+
+        # Save model to file
+        dump(ebm, model_path + f'ebm_{folder}_batch.joblib')
+        
+        # # create model
+        # ebm = ExplainableBoostingClassifier(random_state=seed, n_jobs=-2, interactions=0)
+        
+        # # train model
+        # ebm.fit(X_train, y_train)
                 
-        # save model to file
-        dump(ebm, model_path + f'ebm_{folder}.joblib')
+        # # save model to file
+        # dump(ebm, model_path + f'ebm_{folder}.joblib')
     
     # end time for training model
     end_time = time.time()

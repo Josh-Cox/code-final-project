@@ -595,7 +595,7 @@ def generate_df(filename, num_inputs, k_safety_method, encode_method):
         while count < num_inputs:
             singleInput = create_model_input(chess.pgn.read_game(pgn), k_safety_method)
             if singleInput == -1:
-                print("\nNo more games in file, exiting")
+                print(f'\nNo more games in file, created {count} inputs. Exiting.')
                 break
             if singleInput != None:
                 inputs.append(singleInput)

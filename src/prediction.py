@@ -82,7 +82,7 @@ def make_predictions_multi(boards):
     for row_moves in grouped_moves:
         print(row_moves)
     
-def make_predictions(model_name, folder):
+def make_predictions(model_name, folder, batch):
     """
     Makes predictions using trained models and test data
 
@@ -109,8 +109,13 @@ def make_predictions(model_name, folder):
     # start time for predicting
     start_time = time.time()
     
-    # load trained model from file
-    model = load(model_path + str(model_name) + '_' + str(folder) + '.joblib')
+    # check if batch trained
+    if batch:
+        # load trained model from file
+        model = load(model_path + str(model_name) + '_' + str(folder) + '_batch.joblib')
+    else:
+        # load trained model from file
+        model = load(model_path + str(model_name) + '_' + str(folder) + '.joblib')
 
     # make predictions with probabilities
     y_pred = model.predict(X_test)
@@ -150,12 +155,22 @@ def make_predictions(model_name, folder):
     if not os.path.isdir(str(results_path)):
         os.makedirs(str(results_path))
 
-    # write to file
-    with open(results_path + str(model_name) + '_' + str(folder) + '.txt', 'w') as f:
-        f.write(f'Precision: {precision:.2f}\n')
-        f.write(f'Recall: {recall:.2f}\n')
-        f.write(f'F1-Score: {f1:.2f}\n')
-        f.write(f'Accuracy: {accuracy:.2f}\n')
+    # check if batch trained
+    if batch:
+        # write to file
+        with open(results_path + str(model_name) + '_' + str(folder) + '_batch.txt', 'w') as f:
+            f.write(f'Precision: {precision:.2f}\n')
+            f.write(f'Recall: {recall:.2f}\n')
+            f.write(f'F1-Score: {f1:.2f}\n')
+            f.write(f'Accuracy: {accuracy:.2f}\n')
+    else:
+        # write to file
+        with open(results_path + str(model_name) + '_' + str(folder) + '.txt', 'w') as f:
+            f.write(f'Precision: {precision:.2f}\n')
+            f.write(f'Recall: {recall:.2f}\n')
+            f.write(f'F1-Score: {f1:.2f}\n')
+            f.write(f'Accuracy: {accuracy:.2f}\n')
+        
         
     # print results
     print(f'Precision: {precision:.2f}\n')
@@ -287,7 +302,8 @@ def main():
     # ARGUMENT HANDLING
     parser = argparse.ArgumentParser(description="Model Selection")
     parser.add_argument('-m', choices=['gb', 'ebm'], required=True)
-    parser.add_argument('-n', required=True, help='Number of components to train with (E.g. "10", "20") (Folder must exist under "PCA/")')
+    parser.add_argument('-n', required=True, help='Number of inputs to create')
+    parser.add_argument('--batch', action='store_true', help='Whether to use batch trained model')
     args = parser.parse_args()
     
     # check if given filename exists
@@ -297,7 +313,7 @@ def main():
     
     
     # make predictions
-    make_predictions(args.m, args.n)
+    make_predictions(args.m, args.n, args.batch)
     
     # interpret the model
     # interpret_model()

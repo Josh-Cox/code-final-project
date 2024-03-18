@@ -244,24 +244,26 @@ def pca_analysis(df, plot_type):
     # if folder doesn't exist then create
     if not os.path.isdir(str(PCA_PREFIX)):
         os.makedirs(str(PCA_PREFIX))
-        
-    if plot_type == 'bar':
-        # plot variance
-        plt.bar(x=range(1, len(per_var)+1), height=per_var, tick_label=labels)
-        plt.ylabel("Percentage of Explained Variance")
-        plt.xlabel("Principal Component")
-        plt.title("Scree Plot")
-        plt.show()
-    else:
-        # plot PCA
-        PC_number = np.arange(pca.n_components_) + 1
-        plt.figure(figsize=(10, 6))
-        plt.plot(PC_number, prop_var, 'ro-')
-        plt.title("Scree Plot (Elbow Method)")
-        plt.xlabel("Component Number")
-        plt.ylabel("Proportion of Variance")
-        plt.grid()
-        plt.show()
+    
+    # if user wants a plot, determine which one
+    if plot_type is not None:
+        if plot_type == 'bar':
+            # plot variance
+            plt.bar(x=range(1, len(per_var)+1), height=per_var, tick_label=labels)
+            plt.ylabel("Percentage of Explained Variance")
+            plt.xlabel("Principal Component")
+            plt.title("Scree Plot")
+            plt.show()
+        else:
+            # plot PCA
+            PC_number = np.arange(pca.n_components_) + 1
+            plt.figure(figsize=(10, 6))
+            plt.plot(PC_number, prop_var, 'ro-')
+            plt.title("Scree Plot (Elbow Method)")
+            plt.xlabel("Component Number")
+            plt.ylabel("Proportion of Variance")
+            plt.grid()
+            plt.show()
     
     # number of components to use
     num_comps = input(f'\nEnter the number of components to save (MAX={pca.n_components_}): ')
@@ -304,7 +306,7 @@ def main():
     
     # --- ARGUMENT HANDLING ---
     parser = argparse.ArgumentParser(description="Which functions/plots to run on")
-    parser.add_argument('-p', choices=['bar', 'elbow'], required=True)
+    parser.add_argument('-p', choices=['bar', 'elbow'], required=False)
     parser.add_argument('-f', type=str, required=True)
     # parser.add_argument('-e', choices=['std', 'binary', 'vector'], default='std')
     args = parser.parse_args()
