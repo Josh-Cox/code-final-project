@@ -297,6 +297,10 @@ def pca_analysis(df, plot_type):
     Boards.to_csv(pca_path + 'Boards.csv', index=False)
     df_train.to_csv(pca_path + f'X_pca_train.csv', index=False)
     df_test.to_csv(pca_path + f'X_pca_test.csv', index=False)
+    
+    # Save PCA and Scaler for future predictions
+    dump(pca, pca_path + 'pca.joblib')
+    dump(scaler, pca_path + 'scaler.joblib')
 
 
 def main():

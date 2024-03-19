@@ -182,31 +182,29 @@ def make_predictions(model_name, folder, batch):
     
     return [filtered_y_test, filtered_y_pred, filtered_boards]
     
-def single_prediction(pos):
+def single_prediction(input_data, model_name, folder, batch ):
     
     # load trained model from file
-    model = load(PATH_PREFIX + 'gb.joblib')
+    if batch:
+        model_path = f'{PATH_PREFIX}/{model_name}/{model_name}_{folder}_batch'
+    else:
+        model_path = f'{PATH_PREFIX}/{model_name}/{model_name}_{folder}'
     
-    # get training data to fit the encoder
-    y_train = pd.read_csv(PATH_PREFIX + 'y_train.csv')
+    model = load(model_path + '/model.joblib')
+    pca = load(model_path + '/pca.joblib')
+    scaler = load(model_path + '/scaler.joblib')
     
-    X_board_pos = pos[0]
+    input_data_scaled = scaler.transform(input_data)
+    input_pca = pca.transform(input_data_scaled)
+    X = input_pca.reshape(1, -1)
     
-    # get legal moves for board position
-    legal_moves = X_board_pos.legal_moves
+    y_pred = model.predict(X)
     
-    # make predictions with probabilities
-    predicted_probs = model.predict_proba(pos)
-    
-    # Decode
+    # setup label encoder
     le = LabelEncoder()
-    le.fit(y_train)
+    le.classes_ = np.load('classes.npy')
+    y_pred = le.inverse_transform(y_pred)
     
-    move_classes = le.inverse_transform(model.classes_)
-        
-    filtered_preds = [(move, prob) for move, prob in zip(move_classes, predicted_probs) if is_legal(X_board_pos, move)]
-    
-    return filtered_preds
     
 def is_legal(board, move, method="std"):
     """

@@ -1,4 +1,4 @@
-from joblib import dump
+from joblib import dump, load
 from tqdm import tqdm
 import os
 import time
@@ -25,7 +25,7 @@ DATA_PREFIX = '../data/'
 MODEL_PREFIX = '../models/'
 PCA_PREFIX = '../PCA/'
 
-def train_models(model, folder, encoding_method='std'):
+def train_models(model, folder, batch, encoding_method='std'):
     """
     Trains the models with the given dataframe and saves it to a .joblib file. Also saves X_test to csv file.
 
@@ -62,21 +62,7 @@ def train_models(model, folder, encoding_method='std'):
     y_train = pd.read_csv(PCA_PREFIX + f'{folder}/y_train.csv')
     y_test = pd.read_csv(PCA_PREFIX + f'{folder}/y_test.csv')
     boards = pd.read_csv(PCA_PREFIX + f'{folder}/Boards.csv')
-    
-    # if folder doesn't exist then create
-    model_path = MODEL_PREFIX + str(model) + '/model/'
-    if not os.path.isdir(str(model_path)):
-        os.makedirs(str(model_path))
-    
-    # unique_classes = y_train.apply(lambda col: len(col.unique()))
-    # columns_with_multiple_classes = unique_classes[unique_classes > 1].index
-    
-    # y_train_filtered = y_train[columns_with_multiple_classes]
-    
-    # model = MultiOutputClassifier(GradientBoostingClassifier(random_state=42))
-    
-    # model.fit(X_train, y_train_filtered)
-    
+
     # Encoding the data
     le = LabelEncoder()
     le.fit(y_train)
@@ -92,6 +78,21 @@ def train_models(model, folder, encoding_method='std'):
     seed = 42
     np.random.seed(seed)
     
+    # --- Creating Directories --- #
+    if batch:
+        model_path = f'{MODEL_PREFIX}/{str(model)}/{str(model)}_{folder}_batch'
+    else:
+        model_path = f'{MODEL_PREFIX}/{str(model)}/{str(model)}_{folder}'
+        
+    if not os.path.isdir(str(model_path)):
+        os.makedirs(str(model_path))
+        
+    # Save PCA and Scaler for future predictions
+    pca = load(f'{PCA_PREFIX}/{folder}/pca.joblib')
+    scaler = load(f'{PCA_PREFIX}/{folder}/scaler.joblib')
+    dump(pca, model_path + '/pca.joblib')
+    dump(scaler, model_path + '/scaler.joblib')
+    
     # create, train and save model
     if model == 'gb':
         # create model
@@ -101,47 +102,50 @@ def train_models(model, folder, encoding_method='std'):
         gb.fit(X_train, y_train)
             
         # save model to file
-        dump(gb, model_path + f'gb_{folder}.joblib')
+        dump(gb, model_path + '/model.joblib')
     elif model == 'ebm':
         
-        num_batches = 5  # Adjust the number of batches as needed
-
-        # Calculate the batch size
-        batch_size = len(X_train) // num_batches
-        remainder = len(X_train) % num_batches
-        if remainder != 0:
-            batch_size += 1
-
-        # Create the model outside the loop
-        ebm = ExplainableBoostingClassifier(random_state=seed, n_jobs=-2, interactions=0)
-
-        for i in range(num_batches):
-            batch_start = time.time()
-            
-            start_idx = i * batch_size
-            end_idx = min((i + 1) * batch_size, len(X_train))
-            
-            X_batch = X_train[start_idx:end_idx]
-            y_batch = y_train[start_idx:end_idx]
-
-            # Train model on each batch sequentially
-            ebm.fit(X_batch, y_batch)
-            
-            batch_end = time.time()
-            print(f'\n--- BATCH {i} COMPLETED ---')
-            print(f'\n--- TIME ELAPSED: {batch_end - batch_start} ---')
-
-        # Save model to file
-        dump(ebm, model_path + f'ebm_{folder}_batch.joblib')
+        if batch:
         
-        # # create model
-        # ebm = ExplainableBoostingClassifier(random_state=seed, n_jobs=-2, interactions=0)
-        
-        # # train model
-        # ebm.fit(X_train, y_train)
+            num_batches = 5  # Adjust the number of batches as needed
+
+            # Calculate the batch size
+            batch_size = len(X_train) // num_batches
+            remainder = len(X_train) % num_batches
+            if remainder != 0:
+                batch_size += 1
+
+            # Create the model outside the loop
+            ebm = ExplainableBoostingClassifier(random_state=seed, n_jobs=-2, interactions=0)
+
+            for i in range(num_batches):
+                batch_start = time.time()
                 
-        # # save model to file
-        # dump(ebm, model_path + f'ebm_{folder}.joblib')
+                start_idx = i * batch_size
+                end_idx = min((i + 1) * batch_size, len(X_train))
+                
+                X_batch = X_train[start_idx:end_idx]
+                y_batch = y_train[start_idx:end_idx]
+
+                # Train model on each batch sequentially
+                ebm.fit(X_batch, y_batch)
+                
+                batch_end = time.time()
+                print(f'\n--- BATCH {i} COMPLETED ---')
+                print(f'\n--- TIME ELAPSED: {batch_end - batch_start} ---')
+                
+            # Save model to file
+            dump(ebm, model_path + '/model.joblib')
+                
+        else:
+            # create model
+            ebm = ExplainableBoostingClassifier(random_state=seed, n_jobs=-2, interactions=0)
+            
+            # train model
+            ebm.fit(X_train, y_train)
+                    
+            # save model to file
+            dump(ebm, model_path + '/model.joblib')
     
     # end time for training model
     end_time = time.time()
@@ -154,6 +158,7 @@ def main():
     parser = argparse.ArgumentParser(description="Model Selection")
     parser.add_argument('-m', choices=['gb', 'ebm'], required=True, help='Model Selection')
     parser.add_argument('-n', required=True, help='Number of components to train with (E.g. "10", "20") (Folder must exist under "PCA/")')
+    parser.add_argument('--batch', action='store_true', help='Whether to use batch trained model')
     args = parser.parse_args()
     
     # set encoding method
@@ -168,7 +173,7 @@ def main():
     # df = df.drop(columns=['next_move'])
     
     # train the models
-    train_models(args.m, args.n)
+    train_models(args.m, args.n, args.batch)
     
 if __name__ == '__main__':
     main()
