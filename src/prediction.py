@@ -20,6 +20,7 @@ from sklearn.preprocessing import LabelEncoder
 # path to model files (train_test_split and model joblibs)
 PATH_PREFIX = '../models/'
 PCA_PREFIX = '../PCA/'
+DATA_PREFIX = '../data/'
 
 # global table to decode chess moves
 DECODING_TABLE = {
@@ -82,7 +83,7 @@ def make_predictions_multi(boards):
     for row_moves in grouped_moves:
         print(row_moves)
     
-def make_predictions(model_name, folder, batch):
+def make_predictions(model_name, n_components, pred_type, batch, files=None):
     """
     Makes predictions using trained models and test data
 
@@ -90,32 +91,53 @@ def make_predictions(model_name, folder, batch):
     :param board: board positions to check for legal moves
     """
     
-    model_path = PATH_PREFIX + str(model_name) + '/model/'
-    
+    # path to model folder
+    if batch:
+        model_path = f'{PATH_PREFIX}/{str(model_name)}/{str(model_name)}_{str(n_components)}_batch/'
+    else:
+        model_path = f'{PATH_PREFIX}/{str(model_name)}/{str(model_name)}_{str(n_components)}/'
+        
     # check if model exists
-    if not os.path.isfile(model_path + str(model_name) + '_' + str(folder) + '.joblib'):
+    if not os.path.isfile(f'{model_path}/model.joblib'):
         print("ERROR: No trained model exists. Train using python training.py")
         exit()
     
-    # get test data from train_test_split
-    X_test = pd.read_csv(PCA_PREFIX + str(folder) + '/X_pca_test.csv')
-    X_train = pd.read_csv(PCA_PREFIX + str(folder) + '/X_pca_train.csv')
-    y_train = pd.read_csv(PCA_PREFIX + str(folder) + '/y_train.csv')
-    y_test = pd.read_csv(PCA_PREFIX + str(folder) + '/y_test.csv')
-    boards = pd.read_csv(PCA_PREFIX + str(folder) + '/Boards.csv')
+    if pred_type == "test":
+        # get test data from train_test_split
+        X_test = pd.read_csv(PCA_PREFIX + str(n_components) + '/X_pca_test.csv')
+        y_test = pd.read_csv(PCA_PREFIX + str(n_components) + '/y_test.csv')
+        boards = pd.read_csv(PCA_PREFIX + str(n_components) + '/Boards.csv')
+    else:
+        # check if given filename exists
+        if not os.path.isfile(f'{DATA_PREFIX}/{files}.csv'):
+            print("ERROR: File not found")
+            exit()
+            
+        pca = load(model_path + '/pca.joblib')
+        scaler = load(model_path + '/scaler.joblib')
     
+        input_data = pd.read_csv(f'{DATA_PREFIX}/{files}.csv')
+            
+        # get input data and board
+        X = input_data.drop(columns=['board_pos', 'next_move_encoded'])
+        y_test = input_data[['next_move_encoded']]
+        boards = input_data[['board_pos']]
+        
+        # scale and perform pca
+        X_scaled = scaler.transform(X)
+        X_pca = pca.transform(X_scaled)
+        
+        # get correct number of components
+        X_test = X_pca[:, :n_components]
+            
+        
     print("\n--- MAKING PREDICTIONS ---")
     
     # start time for predicting
     start_time = time.time()
     
-    # check if batch trained
-    if batch:
-        # load trained model from file
-        model = load(model_path + str(model_name) + '_' + str(folder) + '_batch.joblib')
-    else:
-        # load trained model from file
-        model = load(model_path + str(model_name) + '_' + str(folder) + '.joblib')
+    # load trained model from file
+    model = load(f'{model_path}/model.joblib')
 
     # make predictions with probabilities
     y_pred = model.predict(X_test)
@@ -150,27 +172,12 @@ def make_predictions(model_name, folder, batch):
     f1 = f1_score(filtered_y_test, filtered_y_pred, average='weighted')
     accuracy = accuracy_score(filtered_y_test, filtered_y_pred)
 
-    # if folder doesn't exist then create
-    results_path = PATH_PREFIX + '/' + str(model_name) + '/results/'
-    if not os.path.isdir(str(results_path)):
-        os.makedirs(str(results_path))
-
-    # check if batch trained
-    if batch:
-        # write to file
-        with open(results_path + str(model_name) + '_' + str(folder) + '_batch.txt', 'w') as f:
-            f.write(f'Precision: {precision:.2f}\n')
-            f.write(f'Recall: {recall:.2f}\n')
-            f.write(f'F1-Score: {f1:.2f}\n')
-            f.write(f'Accuracy: {accuracy:.2f}\n')
-    else:
-        # write to file
-        with open(results_path + str(model_name) + '_' + str(folder) + '.txt', 'w') as f:
-            f.write(f'Precision: {precision:.2f}\n')
-            f.write(f'Recall: {recall:.2f}\n')
-            f.write(f'F1-Score: {f1:.2f}\n')
-            f.write(f'Accuracy: {accuracy:.2f}\n')
-        
+    # write to file
+    with open(f'{model_path}/results.txt', 'w') as f:
+        f.write(f'Precision: {precision:.2f}\n')
+        f.write(f'Recall: {recall:.2f}\n')
+        f.write(f'F1-Score: {f1:.2f}\n')
+        f.write(f'Accuracy: {accuracy:.2f}\n')
         
     # print results
     print(f'Precision: {precision:.2f}\n')
@@ -179,10 +186,8 @@ def make_predictions(model_name, folder, batch):
     print(f'Accuracy: {accuracy:.2f}\n')
             
     # UI_loop(filtered_boards, filtered_y_pred, filtered_y_test)
-    
-    return [filtered_y_test, filtered_y_pred, filtered_boards]
-    
-def single_prediction(input_data, model_name, folder, batch ):
+        
+def single_prediction(input_file, model_name, folder, batch):
     
     # load trained model from file
     if batch:
@@ -193,19 +198,61 @@ def single_prediction(input_data, model_name, folder, batch ):
     model = load(model_path + '/model.joblib')
     pca = load(model_path + '/pca.joblib')
     scaler = load(model_path + '/scaler.joblib')
+
+    # check if given filename exists
+    if not os.path.isfile(DATA_PREFIX + input_file + '.csv'):
+        print("ERROR: File not found")
+        exit()
     
-    input_data_scaled = scaler.transform(input_data)
-    input_pca = pca.transform(input_data_scaled)
-    X = input_pca.reshape(1, -1)
+    input_data = pd.read_csv(DATA_PREFIX + input_file + '.csv')
     
-    y_pred = model.predict(X)
+    # get input data and board
+    X = input_data.drop(columns=['board_pos'])
+    board = input_data[['board_pos']].iloc[0][0]
+    
+    # scale and perform pca
+    X_scaled = scaler.transform(X)
+    X_pca = pca.transform(X_scaled)
+    
+    # get correct number of components
+    X_pca = X_pca[:, :folder]
+    
+    # make predictions
+    y_probs = model.predict_proba(X_pca)
     
     # setup label encoder
     le = LabelEncoder()
     le.classes_ = np.load('classes.npy')
-    y_pred = le.inverse_transform(y_pred)
     
+    # decode labels
+    decoded_labels = le.inverse_transform(model.classes_)
     
+    print("Predicted Moves:\n")
+    
+    # whether a legal prediction has been found
+    preds = []
+    
+    # loop through probabilities
+    for probs in y_probs:
+        
+        # sort by probability
+        sorted_indices = np.argsort(probs)[::-1]
+        sorted_probs = probs[sorted_indices]
+        sorted_classes = decoded_labels[sorted_indices]
+        
+        # for each label and probability
+        for label, prob in zip(sorted_classes, sorted_probs):
+            # print if it is legal
+            if is_legal(board, label):
+                preds.append((decode_std(label), prob))
+                
+    # print best prediction (if no legal predictions they choose random from legal moves list)
+    if preds == []:
+        # fallback_move = random.choice(legal_moves)
+        print(f"Model couldn't provide a valid prediction")
+    else:
+        print(f"Model predicted: {preds[0][0]}")
+      
 def is_legal(board, move, method="std"):
     """
     Checks if a move is legal for a given board
@@ -299,19 +346,24 @@ def UI_loop(boards, y_pred, y_test):
 def main():
     # ARGUMENT HANDLING
     parser = argparse.ArgumentParser(description="Model Selection")
-    parser.add_argument('-m', choices=['gb', 'ebm'], required=True)
-    parser.add_argument('-n', required=True, help='Number of inputs to create')
-    parser.add_argument('--batch', action='store_true', help='Whether to use batch trained model')
+    parser.add_argument('type', choices=['multiple', 'single'], help="Type of prediction")
+    parser.add_argument('-m', choices=['ebm', 'gb'], required=True, help="Model file to predict with")
+    parser.add_argument('-n', type=int, required=True, help='Number of components used to train model')
+    parser.add_argument('-i', type=str, required=False, help='Input file for prediction')
+    parser.add_argument('--batch', action='store_true', help='If the model was batch trained')
     args = parser.parse_args()
     
-    # check if given filename exists
-    # if not os.path.isfile(DATA_PREFIX + args.f + '.csv'):
-    #     print("ERROR: File not found")
-    #     exit()
-    
+    # check required arguments are present
+    if args.type == 'multiple':
+        make_predictions(args.m, args.n, "prediction", args.batch, args.i)
+    elif args.type == 'single':
+        if args.i is None:
+            print("Single input must be specified (-i)")
+            exit()
+        else:
+            single_prediction(args.i, args.m, args.n, args.batch)
     
     # make predictions
-    make_predictions(args.m, args.n, args.batch)
     
     # interpret the model
     # interpret_model()

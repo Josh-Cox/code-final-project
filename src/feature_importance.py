@@ -203,47 +203,40 @@ def test_model(model_path, data_path, results_path, name, corr_feat):
     print(f'Recall: {recall}\n')
     print(f'F1-Score: {f1}\n')
     
-def pca_analysis(df, plot_type):
+def pca_analysis(df, plot_type, split=False):
     
-    # TODO: Remove next_move in preprocessing
     X = df.drop(columns=['next_move_encoded'])
     y = df[['next_move_encoded']]
+
+    # define scaler
+    scaler = StandardScaler()
+    # define PCA
+    pca = PCA(0.95) # retain 95% of variance
     
-    # board_features = df.iloc[:, -64:]
-    # additional_features = df[['w_safety', 'b_safety', 'w_central', 'b_central', 'w_rating', 'b_rating', 'turn']]
+    X_train = X
+    y_train = y
     
-    # split the data into training and testing    
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
-    
-    # grab board
-    Boards = X_test[['board_pos']]
-    X_test = X_test.drop(columns=['board_pos'])
+    if split:
+        # split the data into training and testing    
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+        # grab board
+        Boards = X_test[['board_pos']]
+        # drop columns
+        X_test = X_test.drop(columns=['board_pos'])
+        
     X_train = X_train.drop(columns=['board_pos'])
     
-    # standardise
-    scaler = StandardScaler()
-    # board_features_scaled = scaler_board.fit_transform(board_features)
-    # additional_features_scaled = scaler_board.fit_transform(additional_features)
+    # apply scaling
     X_train_scaled = scaler.fit_transform(X_train)
-    X_test_scaled = scaler.transform(X_test)
-    
-    # X_scaled = pd.DataFrame(data=np.hstack((board_features_scaled, additional_features_scaled)), columns=board_features.columns.tolist() + additional_features.columns.tolist())
-    
-    # apply PCA
-    pca = PCA(0.95) # retain 95% of variance
+    # apply pca
     X_train_pca = pca.fit_transform(X_train_scaled)
-    X_test_pca = pca.transform(X_test_scaled)
-
+    
     # variance for bar and elbow plot
     per_var = np.round(pca.explained_variance_ratio_ * 100, decimals=1)
     prop_var = pca.explained_variance_ratio_
     
     # labels for plot
     labels = ['PC' + str(x) for x in range(1, len(per_var)+1)]
-    
-    # if folder doesn't exist then create
-    if not os.path.isdir(str(PCA_PREFIX)):
-        os.makedirs(str(PCA_PREFIX))
     
     # if user wants a plot, determine which one
     if plot_type is not None:
@@ -269,6 +262,11 @@ def pca_analysis(df, plot_type):
     num_comps = input(f'\nEnter the number of components to save (MAX={pca.n_components_}): ')
     num_comps = int(num_comps)
     
+    # if folder doesn't exist then create
+    pca_path = PCA_PREFIX + str(num_comps) + '/'
+    if not os.path.isdir(str(pca_path)):
+        os.makedirs(str(pca_path))
+    
     # check number given is valid, if not set to max or min
     if num_comps > pca.n_components_:
         print(f'ERROR: Number of components invalid.\nSetting to MAX={pca.n_components_}')
@@ -276,27 +274,30 @@ def pca_analysis(df, plot_type):
     elif num_comps <= 0:
         print(f'ERROR: Number of components invalid.\nSetting to MIN=1')
         num_comps = 1
+        
+    if split:
+        # apply scaling
+        X_test_scaled = scaler.transform(X_test)
+        # apply pca
+        X_test_pca = pca.transform(X_test_scaled)
+        pca_test = X_test_pca[:, :num_comps]
+        # create dataframe
+        df_test = pd.DataFrame(pca_test, columns=[f'PC{i+1}' for i in range(num_comps)])
+        # save to file
+        df_test.to_csv(pca_path + f'X_pca_test.csv', index=False)
+        y_test.to_csv(pca_path + 'y_test.csv', index=False)
+        Boards.to_csv(pca_path + 'Boards.csv', index=False)
 
 
     # get correct number of components
     pca_train = X_train_pca[:, :num_comps]
-    pca_test = X_test_pca[:, :num_comps]
     
     # generate dataframe
     df_train = pd.DataFrame(pca_train, columns=[f'PC{i+1}' for i in range(num_comps)])
-    df_test = pd.DataFrame(pca_test, columns=[f'PC{i+1}' for i in range(num_comps)])
-    
-    # if folder doesn't exist then create
-    pca_path = PCA_PREFIX + str(num_comps) + '/'
-    if not os.path.isdir(str(pca_path)):
-        os.makedirs(str(pca_path))
     
     # Save to csv files for future use (predictions)
-    y_test.to_csv(pca_path + 'y_test.csv', index=False)
     y_train.to_csv(pca_path + 'y_train.csv', index=False)
-    Boards.to_csv(pca_path + 'Boards.csv', index=False)
     df_train.to_csv(pca_path + f'X_pca_train.csv', index=False)
-    df_test.to_csv(pca_path + f'X_pca_test.csv', index=False)
     
     # Save PCA and Scaler for future predictions
     dump(pca, pca_path + 'pca.joblib')
@@ -312,6 +313,7 @@ def main():
     parser = argparse.ArgumentParser(description="Which functions/plots to run on")
     parser.add_argument('-p', choices=['bar', 'elbow'], required=False)
     parser.add_argument('-f', type=str, required=True)
+    parser.add_argument('--split', action='store_true', required=False, help="Whether to use train_test_split")
     # parser.add_argument('-e', choices=['std', 'binary', 'vector'], default='std')
     args = parser.parse_args()
     
@@ -327,7 +329,7 @@ def main():
     df['turn'] = df['turn'].astype('category')
     
     # call pca with given plot type (-p)
-    pca_analysis(df, args.p)
+    pca_analysis(df, args.p, args.split)
             
     # check command line arguments
 #     if args.f == "pca":

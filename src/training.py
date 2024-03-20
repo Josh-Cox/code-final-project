@@ -5,6 +5,7 @@ import time
 import argparse
 import pandas as pd
 import numpy as np
+from prediction import make_predictions
 
 from progress.spinner import MoonSpinner
 
@@ -34,34 +35,14 @@ def train_models(model, folder, batch, encoding_method='std'):
     :param encoding_method, default='std': encoding method to use for next move
     """
     
-    # create input and output features
-    # if encoding_method == 'std': 
-    #     X = df.drop(columns=['next_move_encoded'])
-    #     y = df['next_move_encoded']
-    # elif encoding_method == 'vector':
-    #     # grouping certain columns
-    #     additional_cols = ['columns_moved', 'ranks_moved']
-    #     start_pos_cols = [col for col in df.columns if len(col) == 1]
-        
-    #     # get columns to keep and drop
-    #     cols_to_drop = additional_cols + ['board_pos','promote_q', 'promote_r', 'promote_n', 'promote_b'] + start_pos_cols
-    #     cols_to_keep = start_pos_cols + additional_cols
-        
-    #     X = df.drop(columns=cols_to_drop)
-        
-    #     y = df[cols_to_keep].copy()
-    
     # check if given folder exists
     if not os.path.isdir(str(PCA_PREFIX + folder)):
         print("ERROR: Folder not found")
         exit()
                 
     # get test data from train_test_split
-    X_test = pd.read_csv(PCA_PREFIX + f'{folder}/X_pca_test.csv')
     X_train = pd.read_csv(PCA_PREFIX + f'{folder}/X_pca_train.csv')
     y_train = pd.read_csv(PCA_PREFIX + f'{folder}/y_train.csv')
-    y_test = pd.read_csv(PCA_PREFIX + f'{folder}/y_test.csv')
-    boards = pd.read_csv(PCA_PREFIX + f'{folder}/Boards.csv')
 
     # Encoding the data
     le = LabelEncoder()
@@ -151,6 +132,8 @@ def train_models(model, folder, batch, encoding_method='std'):
     end_time = time.time()
     
     print(f'\n--- FINISHED TRAINING ---\n\n--- TIME ELAPSED: {end_time - start_time} ---\n')
+    
+    make_predictions(str(model), str(folder), "test", batch)
     
 def main():
     

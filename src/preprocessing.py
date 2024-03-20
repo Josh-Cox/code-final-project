@@ -8,7 +8,9 @@ import os
 import numpy as np
 import pandas as pd
 import argparse
+from progressbar import progressbar
 from progress.bar import Bar
+from alive_progress import alive_bar
 
 # Global Constant Values
 MODEL_PREFIX = '../models/'
@@ -59,7 +61,7 @@ def get_player_ratings(game):
     
     return np.array([game.headers["WhiteElo"], game.headers["BlackElo"]])
 
-def get_random_pos(game, move_number=-1):
+def get_random_pos(game, move_number=-1, turn=1):
     """
     Gets a random board position in a given game
 
@@ -89,12 +91,15 @@ def get_random_pos(game, move_number=-1):
                 break
             
     else:
-        rand = random.randrange(((2*move_number) - 2), ((2*move_number)))
-        count = 0
+        if turn == 'b':
+            count = 0
+        else:
+            count = 1
+
         for move in game.mainline_moves():
             board.push(move)
             count += 1
-            if count == rand:
+            if count == (move_number*2):
                 break
             
     next_move = board.pop()
@@ -515,7 +520,7 @@ def test(game):
     for move in game.mainline_moves():
         print(encode_move_std(move), "\n")
 
-def create_model_input(game, k_safety_method, testing_move_number=-1):
+def create_model_input(game, k_safety_method, testing_move_number=-1, turn=1):
     """
     Takes the game and creates an input for a machine learning model
     
@@ -528,11 +533,11 @@ def create_model_input(game, k_safety_method, testing_move_number=-1):
     if game is None:
         return -1
     
-    if not re.search(r"600[^\d]", game.headers["TimeControl"]):
-        return None
+    if not re.search(r"600[^\d]*", game.headers["TimeControl"]):
+        return -2
     
     # get board position and next move
-    temp = get_random_pos(game, testing_move_number)
+    temp = get_random_pos(game, testing_move_number, turn)
     
     if temp == None:
         return None
@@ -561,7 +566,7 @@ def create_model_input(game, k_safety_method, testing_move_number=-1):
     
     return data
 
-def generate_df(filename, num_inputs, k_safety_method, encode_method):
+def generate_df(filename, num_inputs, start_index=0, k_safety_method='std', encode_method='std'):
     """
     Main function that runs the preprocessing on the chess games database
     
@@ -576,31 +581,43 @@ def generate_df(filename, num_inputs, k_safety_method, encode_method):
     # access games database
     pgn = open(dbpath)
     
-    # # create list of inputs
-    # inputs = []
-    # game = chess.pgn.read_game(pgn)
-    # while (game != None):
-    #     singleInput = create_model_input(game, k_safety_method)
-    #     if singleInput != None:
-    #         inputs.append(singleInput)
-    #     game = chess.pgn.read_game(pgn)
-    
-    # create list of inputs
+    # get to start index position
+    index_count = 0
+    print("\nSkipping to start index...")
+    with alive_bar(start_index, bar="classic2", stats=False, spinner=None) as skip_bar:
+        while index_count < start_index:
+            chess.pgn.skip_game(pgn)
+            index_count += 1
+            skip_bar()
 
-    inputs = []
     
-    # set count for number of inputs
-    count = 0
-    with Bar('Preprocessing data...', max=num_inputs) as bar:
-        while count < num_inputs:
-            singleInput = create_model_input(chess.pgn.read_game(pgn), k_safety_method)
-            if singleInput == -1:
-                print(f'\nNo more games in file, created {count} inputs. Exiting.')
-                break
-            if singleInput != None:
+    if num_inputs == -1:
+        # create list of inputs
+        inputs = []
+        
+        game = chess.pgn.read_game(pgn)
+        while (game != None):
+            singleInput = create_model_input(game, k_safety_method)
+            if singleInput != None and singleInput != -2:
                 inputs.append(singleInput)
-                count += 1
-                bar.next()
+            game = chess.pgn.read_game(pgn)
+    else:
+        # create list of inputs
+        inputs = []
+        
+        # set count for number of inputs
+        count = 0
+        print("\nPreprocessing data...")
+        with alive_bar(num_inputs, bar="classic2", stats=False, spinner=None) as bar:
+            while count < num_inputs:
+                singleInput = create_model_input(chess.pgn.read_game(pgn), k_safety_method)
+                if singleInput == -1:
+                    print(f'\nNo more games in file, created {count} inputs. Exiting.')
+                    break
+                if singleInput != None and singleInput != -2:
+                    inputs.append(singleInput)
+                    count += 1
+                    bar()
     
     columns = ["board_pos", "bitboard", "w_safety", "b_safety", "w_central", "b_central", "w_rating", "b_rating", "turn", "next_move"]
     
@@ -635,20 +652,69 @@ def generate_df(filename, num_inputs, k_safety_method, encode_method):
     # save to csv file
     df.to_csv(DATA_PREFIX + f'{filename}.csv', index=False)
 
+def create_single_input(filename, move_number, turn=1, k_safety_method='std'):
+    # set the file path
+    dbpath = f'../data/{filename}'
+    
+    # access games database
+    pgn = open(dbpath)
+    
+    singleInput = create_model_input(chess.pgn.read_game(pgn), k_safety_method, move_number, turn)
+    
+    columns = ["board_pos", "bitboard", "w_safety", "b_safety", "w_central", "b_central", "w_rating", "b_rating", "turn", "next_move"]
+    
+    # convert to dataframe    
+    df = pd.DataFrame([singleInput])
+    df.columns = columns
+    
+    # Convert bitboard to its own columns for input into model
+    for i in range(64):
+        df[f'square_{i}'] = df['bitboard'].apply(lambda x: x[i])
+    
+    # drop columns
+    df = df.drop(columns=['next_move', 'bitboard'])
+    
+    # remove extenion from filename is needed
+    if filename.endswith('.pgn'):
+        filename = filename[:-4]
+        
+    # save to csv file
+    df.to_csv(DATA_PREFIX + f'{filename}_single.csv', index=False)
+    
+
 def main():
     # ARGUMENT HANDLING
     parser = argparse.ArgumentParser(description="Model Selection")
+    parser.add_argument('type', choices=['single', 'multiple'], help="Type of function to run")
     parser.add_argument('-f', type=str, required=True, help="Name of file to process (including any extensions)")
-    parser.add_argument('-n', type=int, required=True, help='Number of inputs to use')
+    parser.add_argument('-n', type=int, required=False, help='Number of inputs to use (-1 for all)')
+    parser.add_argument('-m', type=int, required=False, help="Specify move number")
+    parser.add_argument('-t', choices=['w', 'b'], required=False, help="Turn (White or Black)")
+    parser.add_argument('-s', type=int, required=False, help="Index of the file to start at")
     args = parser.parse_args()
     
     # check if given filename exists
     if not os.path.isfile(f'../data/{args.f}'):
         print("ERROR: File not found")
         exit()
+    elif args.type == 'single':
+        if args.m is None:
+            print("Please specify a move number (-m)")
+            exit()
+        elif args.t is None:
+            create_single_input(args.f, args.m)
+        else:
+            create_single_input(args.f, args.m, args.t)
+            
+    elif args.type == 'multiple':
+        if args.n is None:
+            print("Please specify the number of inputs to create (-n)")
+            exit()
+        else:
+            generate_df(args.f, args.n, args.s)
+            
     
     
-    generate_df(args.f, args.n, 'std', 'std')
     
 
 if __name__ == "__main__":
