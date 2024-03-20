@@ -26,7 +26,7 @@ DATA_PREFIX = '../data/'
 MODEL_PREFIX = '../models/'
 PCA_PREFIX = '../PCA/'
 
-def train_models(model, folder, batch, encoding_method='std'):
+def train_models(model, folder, batch, split=False, encoding_method='std'):
     """
     Trains the models with the given dataframe and saves it to a .joblib file. Also saves X_test to csv file.
 
@@ -133,15 +133,18 @@ def train_models(model, folder, batch, encoding_method='std'):
     
     print(f'\n--- FINISHED TRAINING ---\n\n--- TIME ELAPSED: {end_time - start_time} ---\n')
     
-    make_predictions(str(model), str(folder), "test", batch)
+    if split:
+        make_predictions(str(model), str(folder), "test", batch)
     
 def main():
     
     # ARGUMENT HANDLING
     parser = argparse.ArgumentParser(description="Model Selection")
-    parser.add_argument('-m', choices=['gb', 'ebm'], required=True, help='Model Selection')
-    parser.add_argument('-n', required=True, help='Number of components to train with (E.g. "10", "20") (Folder must exist under "PCA/")')
-    parser.add_argument('--batch', action='store_true', help='Whether to use batch trained model')
+    parser.add_argument('--model', choices=['gb', 'ebm'], required=True, help='Model Selection')
+    parser.add_argument('--n_comps', required=True, help='Number of components to train with (folder must exist under "PCA/")')
+    parser.add_argument('--batch', action='store_true', help='Whether to batch train')
+    parser.add_argument('--split', action='store_true', required=False, help="Whether to use train_test_split")
+
     args = parser.parse_args()
     
     # set encoding method
@@ -156,7 +159,7 @@ def main():
     # df = df.drop(columns=['next_move'])
     
     # train the models
-    train_models(args.m, args.n, args.batch)
+    train_models(args.model, args.n_comps, args.batch, args.split)
     
 if __name__ == '__main__':
     main()

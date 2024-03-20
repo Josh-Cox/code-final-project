@@ -311,25 +311,25 @@ def main():
     
     # --- ARGUMENT HANDLING ---
     parser = argparse.ArgumentParser(description="Which functions/plots to run on")
-    parser.add_argument('-p', choices=['bar', 'elbow'], required=False)
-    parser.add_argument('-f', type=str, required=True)
+    parser.add_argument('--plot', choices=['bar', 'elbow'], required=False, help="PCA plot type")
+    parser.add_argument('--file', type=str, required=True, help="CSV file to use (excluding extensions)")
     parser.add_argument('--split', action='store_true', required=False, help="Whether to use train_test_split")
     # parser.add_argument('-e', choices=['std', 'binary', 'vector'], default='std')
     args = parser.parse_args()
     
     # check if given filename exists
-    if not os.path.isfile(DATA_PREFIX + args.f + '.csv'):
+    if not os.path.isfile(DATA_PREFIX + args.file + '.csv'):
         print("ERROR: File not found")
         exit()
     
-    df = pd.read_csv(DATA_PREFIX + args.f + '.csv')
+    df = pd.read_csv(DATA_PREFIX + args.file + '.csv')
             
     # change datatypes to category where applicable
     df['next_move_encoded'] = df['next_move_encoded'].astype('category')
     df['turn'] = df['turn'].astype('category')
     
     # call pca with given plot type (-p)
-    pca_analysis(df, args.p, args.split)
+    pca_analysis(df, args.plot, args.split)
             
     # check command line arguments
 #     if args.f == "pca":

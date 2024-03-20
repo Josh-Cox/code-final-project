@@ -347,21 +347,21 @@ def main():
     # ARGUMENT HANDLING
     parser = argparse.ArgumentParser(description="Model Selection")
     parser.add_argument('type', choices=['multiple', 'single'], help="Type of prediction")
-    parser.add_argument('-m', choices=['ebm', 'gb'], required=True, help="Model file to predict with")
-    parser.add_argument('-n', type=int, required=True, help='Number of components used to train model')
-    parser.add_argument('-i', type=str, required=False, help='Input file for prediction')
+    parser.add_argument('--model', choices=['ebm', 'gb'], required=True, help="Model file to predict with")
+    parser.add_argument('--n_comps', type=int, required=True, help='Number of components used to train model')
+    parser.add_argument('--input', type=str, required=False, help='Input file for prediction')
     parser.add_argument('--batch', action='store_true', help='If the model was batch trained')
     args = parser.parse_args()
     
     # check required arguments are present
     if args.type == 'multiple':
-        make_predictions(args.m, args.n, "prediction", args.batch, args.i)
+        make_predictions(args.model, args.n_comps, "prediction", args.batch, args.input)
     elif args.type == 'single':
         if args.i is None:
             print("Single input must be specified (-i)")
             exit()
         else:
-            single_prediction(args.i, args.m, args.n, args.batch)
+            single_prediction(args.input, args.model, args.n_comps, args.batch)
     
     # make predictions
     

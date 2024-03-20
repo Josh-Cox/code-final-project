@@ -686,32 +686,32 @@ def main():
     # ARGUMENT HANDLING
     parser = argparse.ArgumentParser(description="Model Selection")
     parser.add_argument('type', choices=['single', 'multiple'], help="Type of function to run")
-    parser.add_argument('-f', type=str, required=True, help="Name of file to process (including any extensions)")
-    parser.add_argument('-n', type=int, required=False, help='Number of inputs to use (-1 for all)')
-    parser.add_argument('-m', type=int, required=False, help="Specify move number")
-    parser.add_argument('-t', choices=['w', 'b'], required=False, help="Turn (White or Black)")
-    parser.add_argument('-s', type=int, required=False, help="Index of the file to start at")
+    parser.add_argument('--n_inputs', type=int, required=False, help="[Multiple Inputs] Number of inputs to use (-1 for all)")
+    parser.add_argument('--start', type=int, required=False, help="[Multiple Inputs] Index of game to start at (default = 0)")
+    parser.add_argument('--move', type=int, required=False, help="[Single Input] Specify move number for single prediction")
+    parser.add_argument('--turn', choices=['w', 'b'], required=False, help="[Single Input] Turn (White or Black)")
+    parser.add_argument('--file', type=str, required=True, help="Name of file to process (including any extensions)")
     args = parser.parse_args()
     
     # check if given filename exists
-    if not os.path.isfile(f'../data/{args.f}'):
+    if not os.path.isfile(f'../data/{args.file}'):
         print("ERROR: File not found")
         exit()
     elif args.type == 'single':
-        if args.m is None:
+        if args.move is None:
             print("Please specify a move number (-m)")
             exit()
-        elif args.t is None:
-            create_single_input(args.f, args.m)
+        elif args.turn is None:
+            create_single_input(args.file, args.move)
         else:
-            create_single_input(args.f, args.m, args.t)
+            create_single_input(args.file, args.move, args.turn)
             
     elif args.type == 'multiple':
-        if args.n is None:
+        if args.num_comps is None:
             print("Please specify the number of inputs to create (-n)")
             exit()
         else:
-            generate_df(args.f, args.n, args.s)
+            generate_df(args.file, args.n_inputs, args.start)
             
     
     
