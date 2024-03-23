@@ -1,3 +1,5 @@
+# ---------------- IMPORTS ---------------- #
+
 import sys
 import chess.pgn
 import random
@@ -8,11 +10,11 @@ import os
 import numpy as np
 import pandas as pd
 import argparse
-from progressbar import progressbar
-from progress.bar import Bar
 from alive_progress import alive_bar
 
-# Global Constant Values
+# ---------------- GLOBALS ---------------- #
+
+# file paths
 MODEL_PREFIX = '../models/'
 DATA_PREFIX = '../data/'
 PIECE_VALUES = {
@@ -30,7 +32,6 @@ PIECE_VALUES = {
     'Q': 11,
     'K': 12,
 }
-
 
 def addition_factorial(num):
     """
@@ -581,14 +582,16 @@ def generate_df(filename, num_inputs, start_index=0, k_safety_method='std', enco
     # access games database
     pgn = open(dbpath)
     
+    
     # get to start index position
-    index_count = 0
-    print("\nSkipping to start index...")
-    with alive_bar(start_index, bar="classic2", stats=False, spinner=None) as skip_bar:
-        while index_count < start_index:
-            chess.pgn.skip_game(pgn)
-            index_count += 1
-            skip_bar()
+    if start_index > 0:
+        index_count = 0
+        print("\nSkipping to start index...")
+        with alive_bar(start_index, bar="classic2", stats=False, spinner=None) as skip_bar:
+            while index_count < start_index:
+                chess.pgn.skip_game(pgn)
+                index_count += 1
+                skip_bar()
 
     
     if num_inputs == -1:
@@ -681,13 +684,12 @@ def create_single_input(filename, move_number, turn=1, k_safety_method='std'):
     # save to csv file
     df.to_csv(DATA_PREFIX + f'{filename}_single.csv', index=False)
     
-
 def main():
     # ARGUMENT HANDLING
     parser = argparse.ArgumentParser(description="Model Selection")
     parser.add_argument('type', choices=['single', 'multiple'], help="Type of function to run")
     parser.add_argument('--n_inputs', type=int, required=False, help="[Multiple Inputs] Number of inputs to use (-1 for all)")
-    parser.add_argument('--start', type=int, required=False, help="[Multiple Inputs] Index of game to start at (default = 0)")
+    parser.add_argument('--start', type=int, required=False, default=0, help="[Multiple Inputs] Index of game to start at (default = 0)")
     parser.add_argument('--move', type=int, required=False, help="[Single Input] Specify move number for single prediction")
     parser.add_argument('--turn', choices=['w', 'b'], required=False, help="[Single Input] Turn (White or Black)")
     parser.add_argument('--file', type=str, required=True, help="Name of file to process (including any extensions)")
@@ -707,7 +709,7 @@ def main():
             create_single_input(args.file, args.move, args.turn)
             
     elif args.type == 'multiple':
-        if args.num_comps is None:
+        if args.n_inputs is None:
             print("Please specify the number of inputs to create (-n)")
             exit()
         else:

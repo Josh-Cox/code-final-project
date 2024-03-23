@@ -1,23 +1,23 @@
-# Imports
-from preprocessing import *
+# ---------------- IMPORTS ---------------- #
 
-import numpy as np
-import pandas as pd
+
 import matplotlib.pyplot as plt
-import seaborn as sns
-import random
-import shap
-import xgboost as xgb
+import pandas as pd
+import numpy as np
 import argparse
 import os
 
+from halo import Halo
 from joblib import load
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import GradientBoostingClassifier
-from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, precision_score, recall_score
-from sklearn.preprocessing import LabelEncoder
 
-# path to model files (train_test_split and model joblibs)
+from sklearn.preprocessing import LabelEncoder
+from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
+
+from preprocessing import *
+
+# ---------------- GLOBALS ---------------- #
+
+# file paths
 PATH_PREFIX = '../models/'
 PCA_PREFIX = '../PCA/'
 DATA_PREFIX = '../data/'
@@ -91,6 +91,11 @@ def make_predictions(model_name, n_components, pred_type, batch, files=None):
     :param board: board positions to check for legal moves
     """
     
+    # ---------------- DEFINE VARIBALES ---------------- #
+    X_test = None
+    y_test = None
+    boards = None
+    
     # path to model folder
     if batch:
         model_path = f'{PATH_PREFIX}/{str(model_name)}/{str(model_name)}_{str(n_components)}_batch/'
@@ -106,7 +111,7 @@ def make_predictions(model_name, n_components, pred_type, batch, files=None):
         # get test data from train_test_split
         X_test = pd.read_csv(PCA_PREFIX + str(n_components) + '/X_pca_test.csv')
         y_test = pd.read_csv(PCA_PREFIX + str(n_components) + '/y_test.csv')
-        boards = pd.read_csv(PCA_PREFIX + str(n_components) + '/Boards.csv')
+        boards = pd.read_csv(PCA_PREFIX + str(n_components) + '/test_boards.csv')
     else:
         # check if given filename exists
         if not os.path.isfile(f'{DATA_PREFIX}/{files}.csv'):
@@ -130,8 +135,6 @@ def make_predictions(model_name, n_components, pred_type, batch, files=None):
         # get correct number of components
         X_test = X_pca[:, :n_components]
             
-        
-    print("\n--- MAKING PREDICTIONS ---")
     
     # start time for predicting
     start_time = time.time()
@@ -140,7 +143,8 @@ def make_predictions(model_name, n_components, pred_type, batch, files=None):
     model = load(f'{model_path}/model.joblib')
 
     # make predictions with probabilities
-    y_pred = model.predict(X_test)
+    with Halo(text=f'Predicting', color='grey', spinner="dots3"):
+        y_pred = model.predict(X_test)
     
     # end time for predicting
     end_time = time.time()
