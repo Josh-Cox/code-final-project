@@ -1,3 +1,5 @@
+# ---------------- IMPORTS ---------------- #
+
 import os
 import time
 import argparse
@@ -20,6 +22,8 @@ from sklearn.preprocessing import LabelEncoder, scale
 from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score, roc_auc_score
 from sklearn.decomposition import PCA
 
+# ---------------- GLOBALS ---------------- #
+
 set_visualize_provider(InlineProvider())
 
 
@@ -37,14 +41,16 @@ def train_model(df, model, features_to_use, encoding_method='std'):
 
     :param df: the dataframe to train the models on
     :param model: name of the model (used for files) ['gb', 'dt', 'ebm']
-    :param features_to_drop: features to drop from the df
+    :param features_to_use: features from the df to use
     :param encoding_method, default 'std': encoding method for next_move ['std', 'vector', 'binary']
-    :param corr_feat: feature to test correlation of e.g. 'turn' (Must NOT be in features_to_drop)
     """
     
-    # include board pos
+    # ---------------- DEFINE VARIBALES ---------------- #
+    
+    # include board position
     features_to_use.append('board_pos')
     
+    # drop all non needed features
     features_to_drop = [x for x in ALL_FEATURES if x not in features_to_use]    
             
     # Get features
@@ -204,19 +210,38 @@ def test_model(model_path, data_path, results_path, name, corr_feat):
     print(f'F1-Score: {f1}\n')
     
 def make_dir(path):
+    """
+    Checks if a directory exists, if not then creates
+    
+    :param path: directory path
+    """
+    
     if not os.path.isdir(str(path)):
         os.makedirs(str(path))
 
 def split_data(df, test=False):
+    """
+    Split the dataframe into train and validation (also test if needed)
+    
+    :param df: dataframe to split
+    :param test: whether to create a test set
+    
+    :return: train, validation and test sets
+    """
+    
+    # ---------------- DEFINE X AND Y ---------------- #
+
     X = df.drop(columns=['next_move_encoded'])
     y = df[['next_move_encoded']]
     
-    # split the data into training and validation    
+    # ---------------- SPLIT DATA ---------------- #
+    
+    # training and validation    
     X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
     
     # if using test set
     if test:
-        # split the data into training and testing    
+        # raining and testing    
         X_train_new, X_test, y_train_new, y_test = train_test_split(X_train, y_train, test_size=0.2, random_state=42)
         # grab board
         test_boards = X_test[['board_pos']]
@@ -235,9 +260,22 @@ def split_data(df, test=False):
         
         return X_train, X_val, y_train, y_val, val_boards
     
-def plot_pca(pca, plot_type, per_var, prop_var, labels):    
-    # if user wants a plot, determine which one
+def plot_pca(pca, plot_type, per_var, prop_var, labels):
+    """
+    Plots the pca on differnt graphs to visualize variance of components
+    
+    :param pca: the pca to plot
+    :param plot_type: the type of plot ('bar' or 'elbow')
+    :param per_var: TODO
+    :param prop_var: TODO
+    :labels: labels for the graph
+    """
+    
+    # ---------------- PLOT PCA ---------------- #
+    
+    # check plot if wanted
     if plot_type is not None:
+        # determine which plot
         if plot_type == 'bar':
             # plot variance
             plt.bar(x=range(1, len(per_var)+1), height=per_var, tick_label=labels)
@@ -257,15 +295,22 @@ def plot_pca(pca, plot_type, per_var, prop_var, labels):
             plt.show()
              
 def pca_analysis(df, plot_type, test=False):
+    """
+    Perform scaling and PCA on data
+    
+    :param df: dataframe to use
+    :plot_type: the type of plot ('bar' or 'elbow')
+    :param test: whether to use a test set
+    """
     
     # ---------------- DEFINE VARIABLES ---------------- #
     
-    # define scaler
+    # scaler
     scaler = StandardScaler()
-    # define PCA
+    # PCA
     pca = PCA(0.95) # retain 95% of variance
     
-    # define values
+    # values
     X_train, X_val, X_test, y_train, y_val, y_test, val_boards, test_boards = 0, 0, 0, 0, 0, 0, 0, 0
     if test:
         X_train, X_val, X_test, y_train, y_val, y_test, val_boards, test_boards = split_data(df, test)
@@ -273,7 +318,7 @@ def pca_analysis(df, plot_type, test=False):
         X_train, X_val, y_train, y_val, val_boards = split_data(df, test)
     
     
-    # ---------------- APPLY SCALING ---------------- #
+    # ---------------- SCALING & PCA ---------------- #
     
     # apply scaling
     X_train_scaled = scaler.fit_transform(X_train)
@@ -283,7 +328,7 @@ def pca_analysis(df, plot_type, test=False):
     X_train_pca = pca.fit_transform(X_train_scaled)
     X_val_pca = pca.transform(X_val_scaled)
     
-    
+    # if test set is used
     if test:
         # apply scaling
         X_test_scaled = scaler.transform(X_test)
@@ -294,12 +339,14 @@ def pca_analysis(df, plot_type, test=False):
     # ---------------- PLOT PCA ---------------- #
     
     # variance for bar and elbow plot
+    #TODO
     per_var = np.round(pca.explained_variance_ratio_ * 100, decimals=1)
     prop_var = pca.explained_variance_ratio_
     
     # labels for plot
     labels = ['PC' + str(x) for x in range(1, len(per_var)+1)]
     
+    # plot the pca
     plot_pca(pca, plot_type, per_var, prop_var, labels)
     
     
@@ -359,10 +406,7 @@ def pca_analysis(df, plot_type, test=False):
 
 def main():
     
-    # def check_component_number(num):
-    #     if type(num) is int and num < 
-    
-    # --- ARGUMENT HANDLING ---
+    # ---------------- ARGUMENT HANDLING ---------------- #
     parser = argparse.ArgumentParser(description="Which functions/plots to run on")
     parser.add_argument('--plot', choices=['bar', 'elbow'], required=False, help="PCA plot type")
     parser.add_argument('--file', type=str, required=True, help="CSV file to use (excluding extensions)")
@@ -370,73 +414,22 @@ def main():
     # parser.add_argument('-e', choices=['std', 'binary', 'vector'], default='std')
     args = parser.parse_args()
     
+    # ---------------- INITIALISE VALUES ---------------- #
+    
     # check if given filename exists
     if not os.path.isfile(DATA_PREFIX + args.file + '.csv'):
         print("ERROR: File not found")
         exit()
     
+    # create dataframe
     df = pd.read_csv(DATA_PREFIX + args.file + '.csv')
             
     # change datatypes to category where applicable
     df['next_move_encoded'] = df['next_move_encoded'].astype('category')
     df['turn'] = df['turn'].astype('category')
     
-    # call pca with given plot type (-p)
+    # call pca with given plot and test flags
     pca_analysis(df, args.plot, args.test)
-            
-    # check command line arguments
-#     if args.f == "pca":
-#         df = pd.read_csv(DATA_PREFIX + 'lichess-2023-11-100k.csv')
-            
-#         # change datatypes to category where applicable
-#         df['next_move_encoded'] = df['next_move_encoded'].astype('category')
-#         df['turn'] = df['turn'].astype('category')
-        
-#         pca_analysis(df)
-#     else:
-#         user_features = input("""
-# Please enter the numbers of the features you want to use (e.g. 1467)\n
-# w_rating:  1\n
-# b_rating:  2\n
-# w_central: 3\n
-# b_central: 4\n
-# w_safety:  5\n
-# b_safety:  6\n
-# turn:      7\n\n-> """)
-        
-        
-#         # list of features to use
-#         features = ['w_rating', 'b_rating', 'w_central', 'b_central', 'w_safety', 'b_safety', 'turn']
-#         features_to_use = []
-        
-#         # extract user picked features
-#         user_features = str(user_features)
-        
-#         # add feature if it is valid
-#         for num in user_features:
-#             if int(num) not in [1, 2, 3, 4, 5, 6, 7]:
-#                 print("Number invalid")
-#                 exit()
-#             features_to_use.append(features[int(num)-1])
-                
-#         # set encoding method
-#         encoding_method = args.e
-        
-#         # grab relative df from csv
-#         if args.m == "ebm":
-#             df = pd.read_csv(DATA_PREFIX + 'lichess-2023-11-1k.csv')
-#         elif args.m == "gb":
-#             df = pd.read_csv(DATA_PREFIX + 'lichess-2023-11-100k.csv')
-            
-#         # change datatypes to category where applicable
-#         df['next_move_encoded'] = df['next_move_encoded'].astype('category')
-#         df['turn'] = df['turn'].astype('category')
-        
-        
-#         # train the model - remember to add corr_feat parameter if correlation evaluation wanted (see function docstring)
-#         train_model(df, args.m, features_to_use, encoding_method)
-
-    # speed_test(df)
 
     
 if __name__ == '__main__':

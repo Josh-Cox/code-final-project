@@ -14,7 +14,6 @@ from alive_progress import alive_bar
 
 # ---------------- GLOBALS ---------------- #
 
-# file paths
 MODEL_PREFIX = '../models/'
 DATA_PREFIX = '../data/'
 PIECE_VALUES = {
@@ -36,6 +35,10 @@ PIECE_VALUES = {
 def addition_factorial(num):
     """
     Returns the addition factorial of a given number (e.g. 1+2+3 rather than 1*2*3)
+    
+    :param num: number to calculate with
+    
+    :return: addition factorial number
     """
     
     return int(((num*num) + num) / 2)
@@ -45,21 +48,27 @@ def find_number_moves(moves):
     Finds the number of moves in a given game
 
     :param moves: pgn of moves for a game
+    
     :return: number of moves in the game as an integer
     """
+    
+    # check if move set is null
     if moves == "" or moves == None:
         return 0
     
+    # return number of moves
     return int(re.findall(r'(\d+)\.', moves)[-1])
 
 def get_player_ratings(game):
     """
     Returns the ratings of each player
 
-    :param game: The game to retrieve ratings from
-    :return: Player ratings
+    :param game: the game to retrieve ratings from
+    
+    :return: player ratings
     """
     
+    # return player ratings
     return np.array([game.headers["WhiteElo"], game.headers["BlackElo"]])
 
 def get_random_pos(game, move_number=-1, turn=1):
@@ -70,8 +79,11 @@ def get_random_pos(game, move_number=-1, turn=1):
     :param move_number: move number to return position of
     :return: [random board position as FEN, next move]
     """
+    
+    # convert board into boar object
     board = game.board()
     
+    # find the total number of moves
     num_moves = find_number_moves(str(game.mainline_moves()))
     if num_moves <= 0:
         return None
@@ -85,6 +97,7 @@ def get_random_pos(game, move_number=-1, turn=1):
         rand = random.randrange(1, (2*num_moves))
         count = 0
 
+        # push each move until we hit random number
         for move in game.mainline_moves():
             board.push(move)
             count += 1
@@ -92,26 +105,31 @@ def get_random_pos(game, move_number=-1, turn=1):
                 break
             
     else:
+        # if black or white
         if turn == 'b':
             count = 0
         else:
             count = 1
 
+        # push each move until we hit move number
         for move in game.mainline_moves():
             board.push(move)
             count += 1
             if count == (move_number*2):
                 break
-            
+    
+    # pop the last move off of the board
     next_move = board.pop()
-            
+    
+    # return board position and next move
     return [board.fen(), next_move]
 
 def convert_to_bitboard(fen):
     """
     Converts a board position to bitboard representation
 
-    :param board: board of given position to convert
+    :param fen: fen of given position to convert
+    
     :return: bitboard array of position
     """
 
@@ -123,15 +141,17 @@ def convert_to_bitboard(fen):
         Converts a character to its respective integer value
     
         :param x: character to convert
+        
         :return: integer values respetive to character
         """
+        
+        # convert
         return PIECE_VALUES[x]
 
     # vectorize function
     vconvert = np.vectorize(convert_to_value)
 
     # remove newlines and whitespace
-    # board = re.sub(r"[\n\t\s]*", "", board)
     board = np.char.replace(board, ' ', '')
     board = np.char.replace(board, '\n', '')
 
@@ -145,6 +165,7 @@ def find_turn(fen):
     Finds which color's turn it is
 
     :param fen: fen of position
+    
     :return: w (white) or b (black)
     """
 
@@ -161,7 +182,8 @@ def find_kings(pos):
     """
     Finds the position of each king
 
-    :param pos: position in bitboard representation 
+    :param pos: position in bitboard representation
+    
     :return: position of king in bitboard array
     """
 
@@ -169,16 +191,28 @@ def find_kings(pos):
     w_king_pos = np.where(pos == 12)
     b_king_pos = np.where(pos == 6)
 
+    # return as array
     return np.array([w_king_pos[0][0], b_king_pos[0][0]])
 
 def check_top_rank(color, pos):
-    # check if given king position is in the opposite top rank
+    """
+    Checks if given king position is in the opposite top rank
+    
+    :param color: color of king to check for
+    :param pos: position of king
+    
+    : return: True if king position is in the opposite top rank
+    """
+
+    # check for color
     if color == 'w':
+        # if king position is in top rank
         if pos <= 7:
             return True
         else:
             return False
     elif color == 'b':
+        # if king position is in top rank
         if pos >= 57:
             return True
         else:
@@ -190,6 +224,8 @@ def check_king_edges(king_pos, color):
 
         :param king_pos: position of king on bitboard
         :param color: color of king
+        
+        :return: T, L, R or N -> Top, Left, Right or None
         """
         
         # check if king is on opposite top rank
@@ -213,6 +249,8 @@ def check_pawns_in_file(color, checking_pos, bitboard, method):
 
     :param color: color pawn to check for
     :param checking_pos: starting position to check for pawn (moves up the file from this position)
+    
+    :return: calculated points value
     """
     
     # initialize points

@@ -1,6 +1,5 @@
 # ---------------- IMPORTS ---------------- #
 
-
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
@@ -17,12 +16,10 @@ from preprocessing import *
 
 # ---------------- GLOBALS ---------------- #
 
-# file paths
 PATH_PREFIX = '../models/'
 PCA_PREFIX = '../PCA/'
 DATA_PREFIX = '../data/'
 
-# global table to decode chess moves
 DECODING_TABLE = {
     '1': 'a',
     '2': 'b',
@@ -34,14 +31,12 @@ DECODING_TABLE = {
     '8': 'h',
 }
 
-# promotion hashmap
 PROMOTION_DECODING_TABLE = {
     '1': 'r',
     '2': 'n',
     '3': 'b',
     '4': 'q'
 }
-
 
 def make_predictions_multi(boards):
         
@@ -85,13 +80,17 @@ def make_predictions_multi(boards):
     
 def make_predictions(model_name, n_components, pred_type, batch, files=None):
     """
-    Makes predictions using trained models and test data
+    Makes predictions using trained models
 
-    :param X_test: test data for predictions
-    :param board: board positions to check for legal moves
+    :param model_name: name of the trained model
+    :param n_components: number of components used to train model (needs to be same for input data)
+    :param pred_type: prediction type ('multiple' or 'single')
+    :param batch: whether the model was batch trained (for filename)
+    :param files: filename of input position (not neede if using test set in training.py)
     """
     
-    # ---------------- DEFINE VARIBALES ---------------- #
+    # ---------------- SETUP VARIABLES ---------------- #
+
     X_test = None
     y_test = None
     boards = None
@@ -107,6 +106,7 @@ def make_predictions(model_name, n_components, pred_type, batch, files=None):
         print("ERROR: No trained model exists. Train using python training.py")
         exit()
     
+    # if run from training.py using test set
     if pred_type == "test":
         # get test data from train_test_split
         X_test = pd.read_csv(PCA_PREFIX + str(n_components) + '/X_pca_test.csv')
@@ -117,10 +117,12 @@ def make_predictions(model_name, n_components, pred_type, batch, files=None):
         if not os.path.isfile(f'{DATA_PREFIX}/{files}.csv'):
             print("ERROR: File not found")
             exit()
-            
+        
+        # load pca and scaler
         pca = load(model_path + '/pca.joblib')
         scaler = load(model_path + '/scaler.joblib')
     
+        # get input data
         input_data = pd.read_csv(f'{DATA_PREFIX}/{files}.csv')
             
         # get input data and board
@@ -136,12 +138,14 @@ def make_predictions(model_name, n_components, pred_type, batch, files=None):
         X_test = X_pca[:, :n_components]
             
     
+    # ---------------- PREDICTING ---------------- #
+    
     # start time for predicting
     start_time = time.time()
     
     # load trained model from file
     model = load(f'{model_path}/model.joblib')
-
+    
     # make predictions with probabilities
     with Halo(text=f'Predicting', color='grey', spinner="dots3"):
         y_pred = model.predict(X_test)
@@ -152,31 +156,41 @@ def make_predictions(model_name, n_components, pred_type, batch, files=None):
     print("\n--- FINISHED PREDICTIONS ---")
     print(f'\n--- TIME ELAPSED: {end_time - start_time} ---\n')
     
+    # ---------------- DECODE & FILTER PREDICTIONS ---------------- #
+    
     # setup label encoder
     le = LabelEncoder()
     le.classes_ = np.load('classes.npy')
     
+    # decode predictions
     y_pred = le.inverse_transform(y_pred)
     
+    # create legal predictions lists
     filtered_y_pred = []
     filtered_y_test = []
     filtered_boards = []
     
+    # convert to lists
     boards = list(boards['board_pos'])
     y_test = list(y_test['next_move_encoded'])
             
+    # loop through predictions, keeping any legal moves (not just correct ones, legally allowed moves in the current board position)
     for i in range(len(y_pred)):
         if is_legal(boards[i], y_pred[i]):
             filtered_y_pred.append(y_pred[i])
             filtered_y_test.append(y_test[i])
             filtered_boards.append(boards[i])
          
+    # ---------------- SCORING ---------------- #
+    
     precision = precision_score(filtered_y_test, filtered_y_pred, average='weighted', zero_division=0)
     recall = recall_score(filtered_y_test, filtered_y_pred, average='weighted', zero_division=0)
     f1 = f1_score(filtered_y_test, filtered_y_pred, average='weighted')
     accuracy = accuracy_score(filtered_y_test, filtered_y_pred)
 
-    # write to file
+    # ---------------- OUTPUT SCORES ---------------- #
+    
+    # save scores to text file
     with open(f'{model_path}/results.txt', 'w') as f:
         f.write(f'Precision: {precision:.2f}\n')
         f.write(f'Recall: {recall:.2f}\n')
@@ -191,15 +205,27 @@ def make_predictions(model_name, n_components, pred_type, batch, files=None):
             
     # UI_loop(filtered_boards, filtered_y_pred, filtered_y_test)
         
-def single_prediction(input_file, model_name, folder, batch):
+def single_prediction(input_file, model_name, n_components, batch):
+    """
+    Genreate predictions and probabilities for a single input position
+    
+    :param input_file: filename of input position
+    :param model_name: name of the model to use
+    :param n_components: number of PCA components used to train model
+    :param batch: whether the model was batch trained
+    """
+    
+    # ---------------- SETUP VARIBALES ---------------- #
     
     # load trained model from file
     if batch:
-        model_path = f'{PATH_PREFIX}/{model_name}/{model_name}_{folder}_batch'
+        model_path = f'{PATH_PREFIX}/{model_name}/{model_name}_{n_components}_batch'
     else:
-        model_path = f'{PATH_PREFIX}/{model_name}/{model_name}_{folder}'
+        model_path = f'{PATH_PREFIX}/{model_name}/{model_name}_{n_components}'
     
     model = load(model_path + '/model.joblib')
+
+    # load scaler and PCA
     pca = load(model_path + '/pca.joblib')
     scaler = load(model_path + '/scaler.joblib')
 
@@ -208,6 +234,7 @@ def single_prediction(input_file, model_name, folder, batch):
         print("ERROR: File not found")
         exit()
     
+    # get input data
     input_data = pd.read_csv(DATA_PREFIX + input_file + '.csv')
     
     # get input data and board
@@ -219,7 +246,9 @@ def single_prediction(input_file, model_name, folder, batch):
     X_pca = pca.transform(X_scaled)
     
     # get correct number of components
-    X_pca = X_pca[:, :folder]
+    X_pca = X_pca[:, :n_components]
+    
+    # ---------------- PREDICTING ---------------- # 
     
     # make predictions
     y_probs = model.predict_proba(X_pca)
@@ -233,7 +262,7 @@ def single_prediction(input_file, model_name, folder, batch):
     
     print("Predicted Moves:\n")
     
-    # whether a legal prediction has been found
+    # list of legal predictions
     preds = []
     
     # loop through probabilities
@@ -252,6 +281,7 @@ def single_prediction(input_file, model_name, folder, batch):
                 
     # print best prediction (if no legal predictions they choose random from legal moves list)
     if preds == []:
+        # TODO: Add a fallback to pick a random move from legal moves list
         # fallback_move = random.choice(legal_moves)
         print(f"Model couldn't provide a valid prediction")
     else:
@@ -265,7 +295,7 @@ def is_legal(board, move, method="std"):
     :param move: move to check
     :param method: method of encoding used ('hash' or 'std')
     
-    :returns: True or False if move is legal or not respectively
+    :return: True or False if move is legal or not
     """
         
     # check encoding method used
@@ -307,16 +337,33 @@ def is_legal(board, move, method="std"):
         return new_move in chess.Board(board).legal_moves
         
 def decode_std(move):
+    """
+    Decodes a move from numbers to characters
+
+    :param move: move to decode
+    
+    :return: decoded move
+    """
+    
+    # convert move to string
     move = str(move)
     
+    # convert first and third characters using one-hot encoding
     res = DECODING_TABLE[move[0]] + move[1] + DECODING_TABLE[move[2]] + move[3]
     
+    # if move has promotion
     if len(move) > 4:
+        # decode promotion value
         res += PROMOTION_DECODING_TABLE[move[4]]
         
     return res
     
 def display_single_result(predictions):
+    """
+    Displays a single prediction result
+    
+    :param predictions: predictions to display
+    """
     
     # print all predicted moves and their probabilities
     print("Predicted Moves:")
@@ -340,15 +387,28 @@ def display_single_result(predictions):
     # plt.show() 
 
 def UI_loop(boards, y_pred, y_test):
+    """
+    Command line interface for the user to traverse all of the predicted moves, along with the board and the actual moves
+    
+    :param boards: list of board that predictions were made on
+    :param y_pred: predicted moves
+    :param y_test: actual moves
+    """
+    
+    # ask user for prediction number
     pos = int(input("Please enter a number: "))
+    # loop until user inputs -1
     while pos != -1:
+        # print board, prediction and actual move
         print(chess.Board(boards[pos]))
         print("Predicted:", decode_std(y_pred[pos]))
         print("Actual:", decode_std(y_test[pos]))
         pos = int(input("Please enter a number: "))
     
 def main():
-    # ARGUMENT HANDLING
+    
+    # ---------------- ARGUMENT HANDLING ---------------- #
+    
     parser = argparse.ArgumentParser(description="Model Selection")
     parser.add_argument('type', choices=['multiple', 'single'], help="Type of prediction")
     parser.add_argument('--model', choices=['ebm', 'gb'], required=True, help="Model file to predict with")
@@ -356,6 +416,7 @@ def main():
     parser.add_argument('--input', type=str, required=False, help='Input file for prediction')
     parser.add_argument('--batch', action='store_true', help='If the model was batch trained')
     args = parser.parse_args()
+    
     
     # check required arguments are present
     if args.type == 'multiple':
@@ -366,14 +427,6 @@ def main():
             exit()
         else:
             single_prediction(args.input, args.model, args.n_comps, args.batch)
-    
-    # make predictions
-    
-    # interpret the model
-    # interpret_model()
-    
-    # display predictions
-    # display_single_result(preds)
 
     
 if __name__ == '__main__':

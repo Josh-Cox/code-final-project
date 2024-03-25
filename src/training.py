@@ -26,10 +26,8 @@ from pca import make_dir
 
 # ---------------- GLOBALS ---------------- #
 
-# ebm
 set_visualize_provider(InlineProvider())
 
-# file paths
 DATA_PREFIX = '../data/'
 MODEL_PREFIX = '../models/'
 PCA_PREFIX = '../PCA/'
@@ -45,11 +43,6 @@ def train_models(model_name, folder, batch=None, test=False, hyper=False, encodi
     :param hyper, default=False: whether to tune hyperparmeters
     :param encoding_method, default='std': encoding method for 'next_move_encoded'
     """
-    
-    # if train test split used then run predictions
-    # if test:
-    #     make_predictions(str(model_name), str(folder), "test", batch)
-    #     exit()
     
     # check if given folder exists
     if not os.path.isdir(str(PCA_PREFIX + folder)):
@@ -92,6 +85,8 @@ def train_models(model_name, folder, batch=None, test=False, hyper=False, encodi
     scaler = load(f'{PCA_PREFIX}/{folder}/scaler.joblib')
     dump(pca, model_path + '/pca.joblib')
     dump(scaler, model_path + '/scaler.joblib')
+    
+    # ---------------- TRAINING MODEL ---------------- #
     
     # start time of training
     start_time = time.time()
@@ -151,11 +146,23 @@ def train_models(model_name, folder, batch=None, test=False, hyper=False, encodi
     
     print(f'\n--- FINISHED TRAINING ---\n\n--- TIME ELAPSED: {end_time - start_time} ---\n')
     
+    # ---------------- TEST MODEL ---------------- #
+    
     # if train test split used then run predictions
     if test:
         make_predictions(str(model_name), str(folder), "test", batch)
     
 def tune_hyper(X_train, y_train, X_val, y_val, val_boards, model_name):
+    """
+    Trains models with different hyper parameters and records accuracy
+    
+    :param X_train: input training data
+    :param y_trai: output training data
+    :param X_val: input validation data
+    :param y_val: output validation data
+    :param val_boards: boards of the validation data
+    :param model_name: name of the model
+    """
     
     # ---------------- DEFINE MODEL SPECIFIC PARAMETERS ---------------- #
     dt_params = {}
@@ -181,6 +188,7 @@ def tune_hyper(X_train, y_train, X_val, y_val, val_boards, model_name):
 
 
     # ---------------- WIPE OUTPUT FILE ---------------- #
+    
     output_path = f"../hyperparameters/{model_name}.txt"
     if os.path.exists(output_path):
         os.remove(output_path)
@@ -188,14 +196,15 @@ def tune_hyper(X_train, y_train, X_val, y_val, val_boards, model_name):
     f = open(output_path, "w")
     f.close()
     
-
     # ---------------- RUN PARAMETER TUNING ---------------- #
     
     # define number of loops (for progress bar)
     print("\nTuning Hyperparameters...")
 
+    # use correct model
     match model_name:
         case 'dt': 
+            # TODO: hyperparameter tuning
             model = DecisionTreeClassifier(random_state=42)
         case 'gb': 
             # find number of loops (for progress bar)
@@ -209,8 +218,10 @@ def tune_hyper(X_train, y_train, X_val, y_val, val_boards, model_name):
                     for max_depth in gb_params['max_depth']:
                         for n_estimators in gb_params['n_estimators']:
                             for min_child_weight in gb_params['min_child_weight']:
+                                # create model with hyperparameters
                                 model = xgb.XGBClassifier(learning_rate=learning_rate, max_depth=max_depth, n_estimators=n_estimators,
                                                             min_child_weight=min_child_weight, random_state=42, enable_categorical=True)
+                                # get accuracy of model
                                 val_accuracy = train_params(model, X_train, y_train, X_val, y_val, val_boards)
                                 
                                 # write to file
@@ -224,7 +235,7 @@ min_child_weight: {min_child_weight}\n\nAccuracy: {val_accuracy}\n--------------
                                     best_accuracy = val_accuracy
                                     best_model = model
                                 
-                                # progress bar
+                                # increment progress bar
                                 bar()
             
             # print results     
@@ -236,6 +247,8 @@ min_child_weight: {min_child_weight}\n\nAccuracy: {val_accuracy}\n--------------
             print("\n Accuracy:", best_accuracy)
             
         case 'ebm':
+            # TODO: hyperparameter tuning
+            # create model
             model = ExplainableBoostingClassifier(random_state=42, n_jobs=-2, interactions=0) 
   
 def train_params(model, X_train, y_train, X_val, y_val, val_boards):
@@ -247,10 +260,12 @@ def train_params(model, X_train, y_train, X_val, y_val, val_boards):
     :param y_train: training output data for model
     :param X_val: validation input data for model
     :param y_val: validation output data for model
-    :param val_boards: board positions for filtering legal moves
+    :param val_boards: board positions for validation data (filtering illegal moves)
     
     :return: accuracy of the model
     """
+    
+    # train the model
     model.fit(X_train, y_train)
                 
     # evaluate
@@ -260,8 +275,10 @@ def train_params(model, X_train, y_train, X_val, y_val, val_boards):
     le = LabelEncoder()
     le.classes_ = np.load('classes.npy')
     
+    # decode predictions
     val_preds = le.inverse_transform(val_preds)
 
+    # create legal predictions lists
     filtered_y_pred = []
     filtered_y_val = []
     
@@ -287,7 +304,8 @@ def train_model(X_train, y_train, model):
     
     :return: the trained model
     """
-    # train model
+    
+    # train model with spinner
     with Halo(text=f'Training', color='grey', spinner="dots3"):
         model.fit(X_train, y_train) 
         return model
