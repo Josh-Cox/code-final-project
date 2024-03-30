@@ -38,6 +38,17 @@ PROMOTION_DECODING_TABLE = {
     '4': 'q'
 }
 
+SQUARES = {
+    "A1": chess.A1, "A2": chess.A2, "A3": chess.A3, "A4": chess.A4, "A5": chess.A5, "A6": chess.A6, "A7": chess.A7, "A8": chess.A8,
+    "B1": chess.B1, "B2": chess.B2, "B3": chess.B3, "B4": chess.B4, "B5": chess.B5, "B6": chess.B6, "B7": chess.B7, "B8": chess.B8,
+    "C1": chess.C1, "C2": chess.C2, "C3": chess.C3, "C4": chess.C4, "C5": chess.C5, "C6": chess.C6, "C7": chess.C7, "C8": chess.C8,
+    "D1": chess.D1, "D2": chess.D2, "D3": chess.D3, "D4": chess.D4, "D5": chess.D5, "D6": chess.D6, "D7": chess.D7, "D8": chess.D8,
+    "E1": chess.E1, "E2": chess.E2, "E3": chess.E3, "E4": chess.E4, "E5": chess.E5, "E6": chess.E6, "E7": chess.E7, "E8": chess.E8,
+    "F1": chess.F1, "F2": chess.F2, "F3": chess.F3, "F4": chess.F4, "F5": chess.F5, "F6": chess.F6, "F7": chess.F7, "F8": chess.F8,
+    "G1": chess.G1, "G2": chess.G2, "G3": chess.G3, "G4": chess.G4, "G5": chess.G5, "G6": chess.G6, "G7": chess.G7, "G8": chess.G8,
+    "H1": chess.H1, "H2": chess.H2, "H3": chess.H3, "H4": chess.H4, "H5": chess.H5, "H6": chess.H6, "H7": chess.H7, "H8": chess.H8
+}
+
 def make_predictions_multi(boards):
         
     # get test data from train_test_split
@@ -78,7 +89,7 @@ def make_predictions_multi(boards):
     for row_moves in grouped_moves:
         print(row_moves)
     
-def make_predictions(model_name, n_components, pred_type, batch, files=None):
+def make_predictions(model_name, comps_1, comps_2, batch, files=None):
     """
     Makes predictions using trained models
 
@@ -97,58 +108,61 @@ def make_predictions(model_name, n_components, pred_type, batch, files=None):
     
     # path to model folder
     if batch:
-        model_path = f'{PATH_PREFIX}/{str(model_name)}/{str(model_name)}_{str(n_components)}_batch/'
+        model_path = f'{PATH_PREFIX}/{str(model_name)}/{str(model_name)}_{str(comps_1)}_{str(comps_2)}_batch/'
     else:
-        model_path = f'{PATH_PREFIX}/{str(model_name)}/{str(model_name)}_{str(n_components)}/'
+        model_path = f'{PATH_PREFIX}/{str(model_name)}/{str(model_name)}_{str(comps_1)}_{str(comps_2)}/'
         
     # check if model exists
-    if not os.path.isfile(f'{model_path}/model.joblib'):
+    if not os.path.isfile(f'{model_path}/model_start.joblib') or not os.path.isfile(f'{model_path}/model_end.joblib'):
         print("ERROR: No trained model exists. Train using python training.py")
         exit()
+
+    # check if given filename exists
+    if not os.path.isfile(f'{DATA_PREFIX}/{files}.csv'):
+        print("ERROR: File not found")
+        exit()
     
-    # if run from training.py using test set
-    if pred_type == "test":
-        # get test data from train_test_split
-        X_test = pd.read_csv(PCA_PREFIX + str(n_components) + '/X_pca_test.csv')
-        y_test = pd.read_csv(PCA_PREFIX + str(n_components) + '/y_test.csv')
-        boards = pd.read_csv(PCA_PREFIX + str(n_components) + '/test_boards.csv')
-    else:
-        # check if given filename exists
-        if not os.path.isfile(f'{DATA_PREFIX}/{files}.csv'):
-            print("ERROR: File not found")
-            exit()
+    # load pca and scaler
+    pca_start = load(model_path + '/pca_start.joblib')
+    pca_end = load(model_path + '/pca_end.joblib')
+    scaler_start = load(model_path + '/scaler_start.joblib')
+    scaler_end = load(model_path + '/scaler_end.joblib')
+    
+    # setup label encoders
+    le_start = LabelEncoder()
+    le_end = LabelEncoder()
+    le_start.classes_ = np.load('classes_start.npy')
+    le_end.classes_ = np.load('classes_end.npy')
+
+    # get input data
+    input_data = pd.read_csv(f'{DATA_PREFIX}/{files}.csv')
         
-        # load pca and scaler
-        pca = load(model_path + '/pca.joblib')
-        scaler = load(model_path + '/scaler.joblib')
+    # get input data and board
+    X_start = input_data.drop(columns=['board_pos', 'end_square', 'start_square'])
+    X_end = input_data.drop(columns=['board_pos', 'end_square', 'start_square'])
+    y_start = input_data[['start_square']]
+    y_end = input_data[['end_square']]
+    boards = input_data[['board_pos']]
     
-        # get input data
-        input_data = pd.read_csv(f'{DATA_PREFIX}/{files}.csv')
+    # scale and perform pca
+    X_start = scaler_start.transform(X_start)
+    X_start = pca_start.transform(X_start)
+        
+    # get correct number of components
+    X_start = X_start[:, :comps_1]
             
-        # get input data and board
-        X = input_data.drop(columns=['board_pos', 'next_move_encoded'])
-        y_test = input_data[['next_move_encoded']]
-        boards = input_data[['board_pos']]
-        
-        # scale and perform pca
-        X_scaled = scaler.transform(X)
-        X_pca = pca.transform(X_scaled)
-        
-        # get correct number of components
-        X_test = X_pca[:, :n_components]
-            
     
-    # ---------------- PREDICTING ---------------- #
+    # ---------------- PREDICTING START SQUARE ---------------- #
     
     # start time for predicting
     start_time = time.time()
     
     # load trained model from file
-    model = load(f'{model_path}/model.joblib')
+    model_start = load(f'{model_path}/model_start.joblib')
     
     # make predictions with probabilities
-    with Halo(text=f'Predicting', color='grey', spinner="dots3"):
-        y_pred = model.predict(X_test)
+    with Halo(text=f'Predicting starting squares', color='grey', spinner="dots3"):
+        pred_start = model_start.predict(X_start)
     
     # end time for predicting
     end_time = time.time()
@@ -156,37 +170,91 @@ def make_predictions(model_name, n_components, pred_type, batch, files=None):
     print("\n--- FINISHED PREDICTIONS ---")
     print(f'\n--- TIME ELAPSED: {end_time - start_time} ---\n')
     
-    # ---------------- DECODE & FILTER PREDICTIONS ---------------- #
-    
-    # setup label encoder
-    le = LabelEncoder()
-    le.classes_ = np.load('classes.npy')
-    
-    # decode predictions
-    y_pred = le.inverse_transform(y_pred)
-    
-    # create legal predictions lists
-    filtered_y_pred = []
-    filtered_y_test = []
-    filtered_boards = []
+    pred_start = le_start.inverse_transform(pred_start)
     
     # convert to lists
     boards = list(boards['board_pos'])
-    y_test = list(y_test['next_move_encoded'])
+    y_start = list(y_start['start_square'])
+    y_end = list(y_end['end_square'])
+    
+    # create legal predictions lists
+    filtered_pred_start = []
+    filtered_val_start = []
+    
+    # filter illegal moves
+    for i in range(len(pred_start)):
+        print(f"START: {y_start[i]}\nPRED: {pred_start[i]}\nBOARD:\n{chess.Board(boards[i])}")
+        # check is legal (non-empty square)
+        if is_legal_start(boards[i], pred_start[i]):
+            filtered_pred_start.append(pred_start[i])
+            filtered_val_start.append(y_start[i])
+            
+    print(accuracy_score(filtered_val_start, filtered_pred_start))
+    exit()
+    
+    
+    # ---------------- CREARTE DATA FOR MODEL 2 ---------------- #
+    
+    pred_start = le_start.inverse_transform(pred_start)
+    # pred_start = le_end.transform(pred_start)
+
+    X_end['start_square'] = pred_start
+    
+    # scale and perform pca
+    X_end = scaler_end.transform(X_end)
+    X_end = pca_end.transform(X_end)
+    
+    # get correct number of components
+    X_end = X_end[:, :comps_2]
+
+    # ---------------- PREDICTING END SQUARE ---------------- #
+    
+    # start time for predicting
+    start_time = time.time()
+    
+    # load trained model from file
+    model_end = load(f'{model_path}/model_end.joblib')
+    
+    # make predictions with probabilities
+    with Halo(text=f'Predicting ending squares', color='grey', spinner="dots3"):
+        pred_end = model_end.predict(X_end)
+        
+    # end time for predicting
+    end_time = time.time()
+    
+    print("\n--- FINISHED PREDICTIONS ---")
+    print(f'\n--- TIME ELAPSED: {end_time - start_time} ---\n')
+    
+    # ---------------- DECODE & FILTER PREDICTIONS ---------------- #
+
+    
+    # decode predictions
+    pred_end = le_end.inverse_transform(pred_end)
+    
+    # create legal predictions lists
+    filtered_preds = []
+    filtered_acc = []
+    
+    # convert to lists
+    boards = list(boards['board_pos'])
+    y_start = list(y_start['start_square'])
+    y_end = list(y_end['end_square'])
+
             
     # loop through predictions, keeping any legal moves (not just correct ones, legally allowed moves in the current board position)
-    for i in range(len(y_pred)):
-        if is_legal(boards[i], y_pred[i]):
-            filtered_y_pred.append(y_pred[i])
-            filtered_y_test.append(y_test[i])
-            filtered_boards.append(boards[i])
+    for i in range(len(pred_end)):
+        pred_move = str(pred_start[i]) + str(pred_end[i])
+        print(f"MOVE: {decode_std(pred_move)}\nBOARD:\n{chess.Board(boards[i])}")
+        if is_legal(boards[i], pred_move):
+            filtered_preds.append(pred_end[i])
+            filtered_acc.append(int(str(y_start[i]) + str(y_end[i])))
          
     # ---------------- SCORING ---------------- #
     
-    precision = precision_score(filtered_y_test, filtered_y_pred, average='weighted', zero_division=0)
-    recall = recall_score(filtered_y_test, filtered_y_pred, average='weighted', zero_division=0)
-    f1 = f1_score(filtered_y_test, filtered_y_pred, average='weighted')
-    accuracy = accuracy_score(filtered_y_test, filtered_y_pred)
+    precision = precision_score(filtered_acc, filtered_preds, average='weighted', zero_division=0)
+    recall = recall_score(filtered_acc, filtered_preds, average='weighted', zero_division=0)
+    f1 = f1_score(filtered_acc, filtered_preds, average='weighted')
+    accuracy = accuracy_score(filtered_acc, filtered_preds)
 
     # ---------------- OUTPUT SCORES ---------------- #
     
@@ -335,7 +403,29 @@ def is_legal(board, move, method="std"):
         
         # return True if move is in set of legal moves, else return False
         return new_move in chess.Board(board).legal_moves
-        
+    
+def is_legal_start(board, square):
+    
+    # check correct length
+    if len(str(square)) < 4 or len(str(square)) > 5:
+        return False
+
+    # check contains wrong chars
+    s = "12345678"
+    for char in str(square):
+        if char not in s:
+            return False
+
+    board = chess.Board()
+    
+    square = decode_start(square).upper()
+    square = SQUARES[square]
+    
+    if board.piece_at(square) is None:
+        return False
+    else:
+        return True
+
 def decode_std(move):
     """
     Decodes a move from numbers to characters
@@ -357,7 +447,21 @@ def decode_std(move):
         res += PROMOTION_DECODING_TABLE[move[4]]
         
     return res
+
+def decode_start(square):
+    """
+    Decodes a square from numbers to characters
+
+    :param sqaure: sqaure to decode
     
+    :return: decoded sqaure
+    """
+    
+    s = str(square)
+    res = DECODING_TABLE[s[0]] + s[1]
+    
+    return res
+
 def display_single_result(predictions):
     """
     Displays a single prediction result
@@ -412,7 +516,8 @@ def main():
     parser = argparse.ArgumentParser(description="Model Selection")
     parser.add_argument('type', choices=['multiple', 'single'], help="Type of prediction")
     parser.add_argument('--model', choices=['ebm', 'gb'], required=True, help="Model file to predict with")
-    parser.add_argument('--n_comps', type=int, required=True, help='Number of components used to train model')
+    parser.add_argument('--comps_1', type=int, required=True, help='Number of components used to train model 1')
+    parser.add_argument('--comps_2', type=int, required=True, help='Number of components used to train model 2')
     parser.add_argument('--input', type=str, required=False, help='Input file for prediction')
     parser.add_argument('--batch', action='store_true', help='If the model was batch trained')
     args = parser.parse_args()
@@ -420,10 +525,10 @@ def main():
     
     # check required arguments are present
     if args.type == 'multiple':
-        make_predictions(args.model, args.n_comps, "prediction", args.batch, args.input)
+        make_predictions(args.model, args.comps_1, args.comps_2, args.batch, args.input)
     elif args.type == 'single':
         if args.i is None:
-            print("Single input must be specified (-i)")
+            print("Single input must be specified (--input)")
             exit()
         else:
             single_prediction(args.input, args.model, args.n_comps, args.batch)

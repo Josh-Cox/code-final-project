@@ -678,7 +678,11 @@ def generate_df(filename, num_inputs, start_index=0, k_safety_method='std', enco
         encoded_df = encode_moves_binary(df['next_move'].to_numpy())
         df = pd.concat([df, encoded_df], axis=1)
     else:
+        # encode and convert to start and end squares
         df['next_move_encoded'] = df['next_move'].apply(encode_move_std)
+        df['start_square'] = df['next_move_encoded'].str[:2]
+        df['end_square'] = df['next_move_encoded'].str[2:]
+        df = df.drop(columns=['next_move_encoded'])
         
     # drop bitboard column
     df.drop(columns=['bitboard'], inplace=True)
