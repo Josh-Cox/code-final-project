@@ -246,12 +246,14 @@ def split_data(df, test=False):
     # drop board position column
     boards_start = X_val_start[['board_pos']]
     boards_end = X_val_end[['board_pos']]
+    train_boards_start = X_train_start[['board_pos']]
+    train_boards_end = X_train_end[['board_pos']]
     X_train_start = X_train_start.drop(columns=['board_pos'])
     X_val_start = X_val_start.drop(columns=['board_pos'])
     X_train_end = X_train_end.drop(columns=['board_pos'])
     X_val_end = X_val_end.drop(columns=['board_pos'])
     
-    return X_train_start, X_val_start, y_train_start, y_val_start, X_train_end, X_val_end, y_train_end, y_val_end, boards_start, boards_end
+    return X_train_start, X_val_start, y_train_start, y_val_start, X_train_end, X_val_end, y_train_end, y_val_end, boards_start, boards_end, train_boards_start,train_boards_end
     
 def plot_pca(pca_start, pca_end, plot_type, per_var_start, per_var_end, prop_var_start, prop_var_end, labels_start, labels_end):
     """
@@ -329,7 +331,7 @@ def pca_analysis(df, plot_type, test=False):
     pca_end = PCA(0.95) # retain 95% of variance
     
     # get values for both models
-    X_train_start, X_val_start, y_train_start, y_val_start, X_train_end, X_val_end, y_train_end, y_val_end, boards_start, boards_end = split_data(df, test)
+    X_train_start, X_val_start, y_train_start, y_val_start, X_train_end, X_val_end, y_train_end, y_val_end, boards_start, boards_end, train_boards_start, train_boards_end = split_data(df, test)
     
     # save start square column for model 2 testing
     start_squares = X_val_end[['start_square']]
@@ -397,6 +399,9 @@ def pca_analysis(df, plot_type, test=False):
         num_comps_end = 1
 
 
+    # save boards to file
+    train_boards_start.to_csv(pca_path + 'train_boards_start.csv', index=False)
+    train_boards_end.to_csv(pca_path + 'train_boards_end.csv', index=False)
     boards_start.to_csv(pca_path + 'boards_start.csv', index=False)
     boards_end.to_csv(pca_path + 'boards_end.csv', index=False)
         

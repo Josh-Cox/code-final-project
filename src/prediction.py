@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 import argparse
 import os
+import pickle
 
 from halo import Halo
 from joblib import load
@@ -131,8 +132,10 @@ def make_predictions(model_name, comps_1, comps_2, batch, files=None):
     # setup label encoders
     le_start = LabelEncoder()
     le_end = LabelEncoder()
-    le_start.classes_ = np.load('classes_start.npy')
-    le_end.classes_ = np.load('classes_end.npy')
+    le_start.classes_ = np.load(model_path + 'classes_start.npy')
+    le_end.classes_ = np.load(model_path + 'classes_end.npy')
+    
+    
 
     # get input data
     input_data = pd.read_csv(f'{DATA_PREFIX}/{files}.csv')
@@ -160,18 +163,17 @@ def make_predictions(model_name, comps_1, comps_2, batch, files=None):
     # load trained model from file
     model_start = load(f'{model_path}/model_start.joblib')
     
+    # initialise pred_start
+    pred_start = None
+    
     # make predictions with probabilities
     with Halo(text=f'Predicting starting squares', color='grey', spinner="dots3"):
         pred_start = model_start.predict(X_start)
     
-    # end time for predicting
-    end_time = time.time()
-    
-    print("\n--- FINISHED PREDICTIONS ---")
-    print(f'\n--- TIME ELAPSED: {end_time - start_time} ---\n')
-    
-    pred_start = le_start.inverse_transform(pred_start)
-    
+
+    # decode predictions
+    pred_start_decoded = le_start.inverse_transform(pred_start)
+
     # convert to lists
     boards = list(boards['board_pos'])
     y_start = list(y_start['start_square'])
@@ -182,23 +184,15 @@ def make_predictions(model_name, comps_1, comps_2, batch, files=None):
     filtered_val_start = []
     
     # filter illegal moves
-    for i in range(len(pred_start)):
-        print(f"START: {y_start[i]}\nPRED: {pred_start[i]}\nBOARD:\n{chess.Board(boards[i])}")
+    for i in range(len(pred_start_decoded)):
         # check is legal (non-empty square)
-        if is_legal_start(boards[i], pred_start[i]):
-            filtered_pred_start.append(pred_start[i])
+        if is_legal_start(boards[i], pred_start_decoded[i]):
+            filtered_pred_start.append(pred_start_decoded[i])
             filtered_val_start.append(y_start[i])
             
-    print(accuracy_score(filtered_val_start, filtered_pred_start))
-    exit()
-    
-    
     # ---------------- CREARTE DATA FOR MODEL 2 ---------------- #
-    
-    pred_start = le_start.inverse_transform(pred_start)
-    # pred_start = le_end.transform(pred_start)
 
-    X_end['start_square'] = pred_start
+    X_end['start_square'] = pred_start_decoded
     
     # scale and perform pca
     X_end = scaler_end.transform(X_end)
@@ -231,24 +225,30 @@ def make_predictions(model_name, comps_1, comps_2, batch, files=None):
     # decode predictions
     pred_end = le_end.inverse_transform(pred_end)
     
+    filtered_pred_end = []
+    filtered_val_end = []
+        
+    for i in range(len(pred_end)):
+        # convert to move
+        pred_move = str(y_start[i]) + str(pred_end[i])
+        # check is legal
+        if is_legal(boards[i], pred_move):
+            filtered_pred_end.append(pred_end[i])
+            filtered_val_end.append(y_end[i])
+    
     # create legal predictions lists
     filtered_preds = []
     filtered_acc = []
-    
-    # convert to lists
-    boards = list(boards['board_pos'])
-    y_start = list(y_start['start_square'])
-    y_end = list(y_end['end_square'])
-
             
     # loop through predictions, keeping any legal moves (not just correct ones, legally allowed moves in the current board position)
     for i in range(len(pred_end)):
-        pred_move = str(pred_start[i]) + str(pred_end[i])
-        print(f"MOVE: {decode_std(pred_move)}\nBOARD:\n{chess.Board(boards[i])}")
+        pred_move = str(pred_start_decoded[i]) + str(pred_end[i])
+        # print(f"\nPred: {pred_move}  Move: {str(y_start[i]) + str(y_end[i])} \nBoard\n{chess.Board(boards[i])}")
         if is_legal(boards[i], pred_move):
-            filtered_preds.append(pred_end[i])
+            filtered_preds.append(int(pred_move))
             filtered_acc.append(int(str(y_start[i]) + str(y_end[i])))
-         
+            
+
     # ---------------- SCORING ---------------- #
     
     precision = precision_score(filtered_acc, filtered_preds, average='weighted', zero_division=0)
@@ -266,10 +266,13 @@ def make_predictions(model_name, comps_1, comps_2, batch, files=None):
         f.write(f'Accuracy: {accuracy:.2f}\n')
         
     # print results
-    print(f'Precision: {precision:.2f}\n')
-    print(f'Recall: {recall:.2f}\n')
-    print(f'F1-Score: {f1:.2f}\n')
-    print(f'Accuracy: {accuracy:.2f}\n')
+    print(f"\nStart Square Prediction Accuracy: {accuracy_score(filtered_val_start, filtered_pred_start)}")
+    print(f"End Square Prediction Accuracy: {accuracy_score(filtered_val_end, filtered_pred_end)}")
+    print("\nMove Prediction Scores:\n")
+    print(f'Precision: {precision:.2f}')
+    print(f'Recall: {recall:.2f}')
+    print(f'F1-Score: {f1:.2f}')
+    print(f'Accuracy: {accuracy:.2f}')
             
     # UI_loop(filtered_boards, filtered_y_pred, filtered_y_test)
         
@@ -407,7 +410,7 @@ def is_legal(board, move, method="std"):
 def is_legal_start(board, square):
     
     # check correct length
-    if len(str(square)) < 4 or len(str(square)) > 5:
+    if len(str(square)) != 2:
         return False
 
     # check contains wrong chars
@@ -515,7 +518,7 @@ def main():
     
     parser = argparse.ArgumentParser(description="Model Selection")
     parser.add_argument('type', choices=['multiple', 'single'], help="Type of prediction")
-    parser.add_argument('--model', choices=['ebm', 'gb'], required=True, help="Model file to predict with")
+    parser.add_argument('--model', choices=['ebm', 'gb', 'dt'], required=True, help="Model file to predict with")
     parser.add_argument('--comps_1', type=int, required=True, help='Number of components used to train model 1')
     parser.add_argument('--comps_2', type=int, required=True, help='Number of components used to train model 2')
     parser.add_argument('--input', type=str, required=False, help='Input file for prediction')
