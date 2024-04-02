@@ -583,6 +583,7 @@ def create_model_input(game, k_safety_method, testing_move_number=-1, turn=1):
     
     board_pos = temp[0]
     next_move = str(temp[1])
+    if len(next_move) == 5: return None
     
     # convert to bitboard
     bitboard = convert_to_bitboard(board_pos)

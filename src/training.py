@@ -20,8 +20,10 @@ from interpret import set_visualize_provider
 
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.preprocessing import LabelEncoder
-from sklearn.metrics import accuracy_score, make_scorer
+from sklearn.metrics import accuracy_score, make_scorer, precision_score, recall_score, f1_score
 from sklearn.model_selection import GridSearchCV
+from skopt import BayesSearchCV
+from skopt.space import Integer, Real
 
 from prediction import make_predictions, is_legal, is_legal_start, decode_std
 from pca import make_dir
@@ -64,14 +66,55 @@ def train_models(model_name, comps_start, comps_end, batch=None, hyper=False, en
     y_val_end = pd.read_csv(f'{PCA_PREFIX}{comps_start}_{comps_end}/y_val_end.csv')
     boards_start = pd.read_csv(f'{PCA_PREFIX}{comps_start}_{comps_end}/boards_start.csv')
     boards_end = pd.read_csv(f'{PCA_PREFIX}{comps_start}_{comps_end}/boards_end.csv')
+
     global train_boards_start
     train_boards_start = pd.read_csv(f'{PCA_PREFIX}{comps_start}_{comps_end}/train_boards_start.csv')
+    global train_boards_end
     train_boards_end = pd.read_csv(f'{PCA_PREFIX}{comps_start}_{comps_end}/train_boards_end.csv')
+    global start_squares
+    start_squares = list(y_train_start['start_square'])
     
-    start_squares = pd.read_csv(f'{PCA_PREFIX}{comps_start}_{comps_end}/start_squares.csv')
+    # ---------------- CREATE DIRECTORIES ---------------- #
+    
+    if batch:
+        model_path = f'{MODEL_PREFIX}{str(model_name)}/{str(model_name)}_{comps_start}_{comps_end}_batch'
+    else:
+        model_path = f'{MODEL_PREFIX}{str(model_name)}/{str(model_name)}_{comps_start}_{comps_end}'
+        
+    make_dir(model_path)
+
+    # ---------------- SAVE PCA & SCALER TO FILE ---------------- #
+    
+    pca_start = load(f'{PCA_PREFIX}{comps_start}_{comps_end}/pca_start.joblib')
+    pca_end = load(f'{PCA_PREFIX}{comps_start}_{comps_end}/pca_end.joblib')
+    scaler_start = load(f'{PCA_PREFIX}{comps_start}_{comps_end}/scaler_start.joblib')
+    scaler_end = load(f'{PCA_PREFIX}{comps_start}_{comps_end}/scaler_end.joblib')
+    dump(pca_start, model_path + '/pca_start.joblib')
+    dump(pca_end, model_path + '/pca_end.joblib')
+    dump(scaler_start, model_path + '/scaler_start.joblib')
+    dump(scaler_end, model_path + '/scaler_end.joblib')
 
    # ---------------- DATA ENCODING ---------------- #
 
+    # keep original versions for combining models later
+    # X_val_start_og = X_val_start
+    X_val_end_og = X_val_end
+    
+    # perform scaling
+    # X_val_start = scaler_start.transform(X_val_start)
+    X_val_end = scaler_end.transform(X_val_end)
+    
+    # perform pca
+    # X_val_start = pca_start.transform(X_val_start)
+    X_val_end = pca_end.transform(X_val_end)
+    
+    # get corect number of components
+    # X_val_start = X_val_start[:, :comps_start]
+    X_val_end = X_val_end[:, :int(comps_end)]
+    
+    # convert to dataframe
+    # X_val_start = pd.DataFrame(X_val_start, columns=[f'PC{i+1}' for i in range(comps_start)])
+    X_val_end = pd.DataFrame(X_val_end, columns=[f'PC{i+1}' for i in range(int(comps_end))])
    
     # change shape
     y_train_start = np.ravel(y_train_start)
@@ -92,30 +135,10 @@ def train_models(model_name, comps_start, comps_end, batch=None, hyper=False, en
     y_train_end = le_end.transform(y_train_end)
     
     
-    # ---------------- CREATE DIRECTORIES ---------------- #
-    if batch:
-        model_path = f'{MODEL_PREFIX}{str(model_name)}/{str(model_name)}_{comps_start}_{comps_end}_batch'
-    else:
-        model_path = f'{MODEL_PREFIX}{str(model_name)}/{str(model_name)}_{comps_start}_{comps_end}'
-        
-    make_dir(model_path)
-    
     # save label encoder classes for later use
     # np.save(f"{MODEL_PREFIX}{str(model_name)}/{str(model_name)}_{comps_start}_{comps_end}/classes_start.npy", le_start.classes_)
     np.save(f"{MODEL_PREFIX}{str(model_name)}/{str(model_name)}_{comps_start}_{comps_end}/classes_start.npy", le_start.classes_)
     np.save(f"{MODEL_PREFIX}{str(model_name)}/{str(model_name)}_{comps_start}_{comps_end}/classes_end.npy", le_end.classes_)
-
-        
-    # ---------------- SAVE PCA & SCALER TO FILE ---------------- #
-    
-    pca_start = load(f'{PCA_PREFIX}{comps_start}_{comps_end}/pca_start.joblib')
-    pca_end = load(f'{PCA_PREFIX}{comps_start}_{comps_end}/pca_end.joblib')
-    scaler_start = load(f'{PCA_PREFIX}{comps_start}_{comps_end}/scaler_start.joblib')
-    scaler_end = load(f'{PCA_PREFIX}{comps_start}_{comps_end}/scaler_end.joblib')
-    dump(pca_start, model_path + '/pca_start.joblib')
-    dump(pca_end, model_path + '/pca_end.joblib')
-    dump(scaler_start, model_path + '/scaler_start.joblib')
-    dump(scaler_end, model_path + '/scaler_end.joblib')
     
     # ---------------- TRAINING MODEL ---------------- #
     
@@ -123,7 +146,7 @@ def train_models(model_name, comps_start, comps_end, batch=None, hyper=False, en
     start_time = time.time()
     
     # initialise model
-    model_start, model_end = None
+    model_start, model_end = None, None
     
     # if tuning hyperparameters
     if hyper: 
@@ -137,7 +160,7 @@ def train_models(model_name, comps_start, comps_end, batch=None, hyper=False, en
                 model_end = DecisionTreeClassifier(random_state=42)
                 model_start, model_end = train_model(X_train_start, X_train_end, y_train_start, y_train_end, model_start, model_end)
             case 'gb':
-                model_start = xgb.XGBClassifier(random_state=42, enable_categorical=True, learning_rate=0.01, max_depth=5, min_child_weight=3, n_estimators=300)
+                model_start = xgb.XGBClassifier(random_state=42, enable_categorical=True)
                 model_end = xgb.XGBClassifier(random_state=42, enable_categorical=True)
                 model_start, model_end = train_model(X_train_start, X_train_end, y_train_start, y_train_end, model_start, model_end)
             case 'ebm':
@@ -190,7 +213,6 @@ def train_models(model_name, comps_start, comps_end, batch=None, hyper=False, en
     boards_end = list(boards_end['board_pos'])
     y_val_start = list(y_val_start['start_square'])
     y_val_end = list(y_val_end['end_square'])
-    start_squares = list(start_squares['start_square'])
 
     # create legal predictions lists
     filtered_pred_start = []
@@ -214,31 +236,74 @@ def train_models(model_name, comps_start, comps_end, batch=None, hyper=False, en
     
     for i in range(len(pred_end)):
         # convert to move
-        pred_move = str(start_squares[i]) + str(pred_end[i])
+        pred_move = str(y_val_start[i]) + str(pred_end[i])
         # check is legal
         if is_legal(boards_end[i], pred_move):
             filtered_pred_end.append(pred_end[i])
             filtered_val_end.append(y_val_end[i])
 
+
+    # create data for overall accuracy evaluation
+    X_val_end_og = X_val_end_og.drop(columns=['start_square'])
+    X_val_end_og['start_square'] = pred_start
     
-    # scores
+    # scale and perform pca
+    X_val_end_og = scaler_end.transform(X_val_end_og)
+    X_val_end_og = pca_end.transform(X_val_end_og)
+    
+    # get correct number of components
+    X_val_end_og = X_val_end_og[:, :int(comps_end)]
+    
+    # make predictions
+    preds = model_end.predict(X_val_end_og)
+    
+    # decode predictions
+    preds = le_end.inverse_transform(preds)
+    
+    # create legal predictions lists
+    filtered_preds = []
+    filtered_acc = []
+            
+    # loop through predictions, keeping any legal moves (not just correct ones, legally allowed moves in the current board position)
+    for i in range(len(pred_end)):
+        pred_move = str(pred_start[i]) + str(preds[i])
+        # print(f"\nPred: {pred_move}  Move: {str(y_start[i]) + str(y_end[i])} \nBoard\n{chess.Board(boards[i])}")
+        if is_legal(boards_end[i], pred_move):
+            filtered_preds.append(int(pred_move))
+            filtered_acc.append(int(str(y_val_start[i]) + str(y_val_end[i])))
+    
+    # individual accuracy scores
     acc_start = accuracy_score(filtered_val_start, filtered_pred_start)
     acc_end = accuracy_score(filtered_val_end, filtered_pred_end)
     
-    # output scores
-    print(f"Model 1 Score: {acc_start}\nModel 2 Score: {acc_end}\n")
+    # overall scores
+    acc_overall = accuracy_score(filtered_acc, filtered_preds)
+    f1 = f1_score(filtered_acc, filtered_preds, average='weighted')
+    precision = precision_score(filtered_acc, filtered_preds, average='weighted', zero_division=0)
+    recall = recall_score(filtered_acc, filtered_preds, average='weighted', zero_division=0)
+    
         
     # end time for training model
     end_time = time.time()
     
     print(f'\n--- FINISHED TRAINING ---\n\n--- TIME ELAPSED: {end_time - start_time} ---\n')
+
+    # output scores
+    print(f"\nModel 1 Score: {acc_start}\nModel 2 Score: {acc_end}\nCombined Model Score: {acc_overall}")
     
-def score_function(model, X, y):
+    # save scores to file
+    with open(f"{model_path}/results.txt", "w") as f:
+        f.write(f"Accuracy: {acc_overall}\nF1-Score: {f1}\nPrecision: {precision}\nRecall: {recall}")
+        
+    return acc_overall
+    
+def score_function_start(model, X, y):
     
     # predict
     preds = model.predict(X)
     
     # convert to lists
+    global train_boards_start
     boards = list(train_boards_start['board_pos'])
 
     # create legal predictions lists
@@ -254,6 +319,33 @@ def score_function(model, X, y):
     
     # return accuracy
     return accuracy_score(filtered_acc, filtered_pred)
+
+def score_function_end(model, X, y):
+    
+    # predict
+    preds = model.predict(X)
+    
+    # convert to lists
+    global train_boards_end
+    global start_squares
+    boards = list(train_boards_end['board_pos'])
+
+    # create legal predictions lists
+    filtered_pred = []
+    filtered_acc = []
+
+    # filter illegal moves
+    for i in range(len(preds)):
+        # create move
+        pred_move = str(start_squares[i]) + str(preds[i])
+        # check is legal
+        if is_legal(boards[i], pred_move):
+            filtered_pred.append(preds[i])
+            filtered_acc.append(y[i])
+    
+    # return accuracy
+    acc =  accuracy_score(filtered_acc, filtered_pred)
+    return acc
         
 
 def tune_hyper(X_train, y_train, X_val, y_val, train_boards_start, model_name):
@@ -272,19 +364,15 @@ def tune_hyper(X_train, y_train, X_val, y_val, train_boards_start, model_name):
     dt_params = {}
     
     gb_params = {
-        'learning_rate': [1, 0.01, 0.0001],
-        'max_depth': [1, 5, 15],
-        'n_estimators': [10, 500, 1000],
-        'min_child_weight': [1, 5, 15],
+        'learning_rate': [0.0001, 1],
+        'max_depth': [1, 15],
+        'n_estimators': [10, 1000],
+        'min_child_weight': [1, 15],
     }
     
     ebm_params = {}
     
     # ---------------- DEFINE VARIABLES ---------------- #
-
-    # define best accuracy and model
-    best_model = None
-    best_accuracy = 0
     
     # convert to array
     # val_boards = list(val_boards['board_pos'])
@@ -293,43 +381,74 @@ def tune_hyper(X_train, y_train, X_val, y_val, train_boards_start, model_name):
 
     # ---------------- WIPE OUTPUT FILE ---------------- #
     
-    output_path = f"../hyperparameters/{model_name}.txt"
-    if os.path.exists(output_path):
-        os.remove(output_path)
+    # output_path_start = f"../hyperparameters/{model_name}_start.txt"
+    # output_path_end = f"../hyperparameters/{model_name}_end.txt"
+    # if os.path.exists(output_path_start):
+    #     os.remove(output_path_start)
+    # if os.path.exists(output_path_end):
+    #     os.remove(output_path_end)
         
-    f = open(output_path, "w")
-    f.close()
+    # f_start = open(output_path_start, "w")
+    # f_start.close()
+    # f_end = open(output_path_end, "w")
+    # f_end.close()
     
     # ---------------- RUN PARAMETER TUNING ---------------- #
     
     # define number of loops (for progress bar)
     print("\nTuning Hyperparameters...")
+    
+    # initialise model and grid search
+    model_start, model_end = None, None
+    grid_search_start, grid_search_end = None, None
 
     # use correct model
     match model_name:
         case 'dt': 
-            # TODO: hyperparameter tuning
-            model = DecisionTreeClassifier(random_state=42)
+            # create model
+            model_start = DecisionTreeClassifier(random_state=42)
+            model_end = DecisionTreeClassifier(random_state=42)
+            grid_search_start = GridSearchCV(model_start, dt_params, cv=5, verbose=2, scoring=score_function_start)
+            grid_search_end = GridSearchCV(model_end, dt_params, cv=5, verbose=2, scoring=score_function_end)
         case 'gb': 
-            # include boards for score function
-            model = xgb.XGBClassifier(random_state=42, enable_categorical=True)
-            grid_search = GridSearchCV(model, gb_params, cv=3, scoring=score_function)
-            grid_search.fit(X_train, y_train)
-            best_params = grid_search.best_params_
-            best_score = grid_search.best_score_
-
-            # write to file
-            with open(f"../hyperparameters/{model_name}.txt", "a") as f:
-                f.write(f"\nParameters Tested: {gb_params}\nBest Parameters: {best_params}\n--------------------")         
-            
-            # print results     
-            print(f"Best Hyperparameters:\n{best_params}")
-            print("\n Accuracy:", best_score)
+            # create model
+            model_start = xgb.XGBClassifier(random_state=42, enable_categorical=True)
+            model_end = xgb.XGBClassifier(random_state=42, enable_categorical=True)
+            grid_search_start = GridSearchCV(model_start, gb_params, cv=5, verbose=2, scoring=score_function_start)
+            grid_search_end = GridSearchCV(model_end, gb_params, cv=5, verbose=2, scoring=score_function_end)
             
         case 'ebm':
-            # TODO: hyperparameter tuning
             # create model
-            model = ExplainableBoostingClassifier(random_state=42, n_jobs=-2, interactions=0) 
+            model_start = ExplainableBoostingClassifier(random_state=42, n_jobs=-2, interactions=0) 
+            model_end = ExplainableBoostingClassifier(random_state=42, n_jobs=-2, interactions=0) 
+            grid_search_start = GridSearchCV(model_start, ebm_params, cv=5, verbose=2, scoring=score_function_start)
+            grid_search_end = GridSearchCV(model_end, ebm_params, cv=5, verbose=2, scoring=score_function_end)
+    
+    # ---------------- TRAIN MODELS AND SAVE BEST ---------------- #
+    
+    grid_search_start.fit(X_train, y_train)
+    best_params_start = grid_search_start.best_params_
+    best_score_start = grid_search_start.best_score_
+    
+    # write to files
+    with open(f"../hyperparameters/{model_name}_start.txt", "a") as f:
+        f.write(f"\nParameters Tested: {gb_params}\nBest Parameters: {best_params_start}\nBest Mean CV Score: {best_score_start}\n--------------------")         
+        
+    # print results     
+    print(f"\nModel 1 Best Hyperparameters:\n{best_params_start}")
+    print(f"\nModel 1 Mean CV Score: {best_score_start}\n")
+
+    grid_search_end.fit(X_train, y_train)
+    best_params_end = grid_search_end.best_params_
+    best_score_end = grid_search_end.best_score_
+
+    # write to files
+    with open(f"../hyperparameters/{model_name}_end.txt", "a") as f:
+        f.write(f"\nParameters Tested: {gb_params}\nBest Parameters: {best_params_end}\nBest Mean CV Score: {best_score_end}\n--------------------")         
+
+    # print results     
+    print(f"\nModel 2 Best Hyperparameters:\n{best_params_end}")
+    print(f"\nModel 2 Mean CV Score: {best_score_end}\n")
 
   
 def train_params(model, X_train, y_train, X_val, y_val, val_boards):

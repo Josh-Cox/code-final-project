@@ -1,0 +1,5 @@
+
+Parameters Tested: {'learning_rate': [0.0001, 1], 'max_depth': [1, 15], 'n_estimators': [10, 1000], 'min_child_weight': [1, 15]}
+Best Parameters: {'learning_rate': 0.0001, 'max_depth': 15, 'min_child_weight': 1, 'n_estimators': 1000}
+Best Mean CV Score: 0.10413348155676172
+--------------------

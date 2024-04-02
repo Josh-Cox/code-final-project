@@ -35,179 +35,179 @@ PCA_PREFIX = '../PCA/'
 
 ALL_FEATURES = ['w_safety', 'b_safety', 'w_central', 'b_central', 'w_rating', 'b_rating', 'turn']
 
-def train_model(df, model, features_to_use, encoding_method='std'):
-    """
-    Trains the model with the given dataframe and saves it to a .joblib file. Also saves train_test_split data
+# def train_model(df, model, features_to_use, encoding_method='std'):
+#     """
+#     Trains the model with the given dataframe and saves it to a .joblib file. Also saves train_test_split data
 
-    :param df: the dataframe to train the models on
-    :param model: name of the model (used for files) ['gb', 'dt', 'ebm']
-    :param features_to_use: features from the df to use
-    :param encoding_method, default 'std': encoding method for next_move ['std', 'vector', 'binary']
-    """
+#     :param df: the dataframe to train the models on
+#     :param model: name of the model (used for files) ['gb', 'dt', 'ebm']
+#     :param features_to_use: features from the df to use
+#     :param encoding_method, default 'std': encoding method for next_move ['std', 'vector', 'binary']
+#     """
     
-    # ---------------- DEFINE VARIBALES ---------------- #
+#     # ---------------- DEFINE VARIBALES ---------------- #
     
-    # include board position
-    features_to_use.append('board_pos')
+#     # include board position
+#     features_to_use.append('board_pos')
     
-    # drop all non needed features
-    features_to_drop = [x for x in ALL_FEATURES if x not in features_to_use]    
+#     # drop all non needed features
+#     features_to_drop = [x for x in ALL_FEATURES if x not in features_to_use]    
             
-    # Get features
-    X = df.drop(columns=features_to_drop)
-    y = df['next_move_encoded']
+#     # Get features
+#     X = df.drop(columns=features_to_drop)
+#     y = df['next_move_encoded']
 
-    # split into test and train data
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+#     # split into test and train data
+#     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
     
-    # separate boards from X_test
-    Boards = X_test['board_pos']
-    X_test = X_test.drop(columns=['board_pos'])
-    X_train = X_train.drop(columns=['board_pos'])
+#     # separate boards from X_test
+#     Boards = X_test['board_pos']
+#     X_test = X_test.drop(columns=['board_pos'])
+#     X_train = X_train.drop(columns=['board_pos'])
     
-    # get suffix for file names
-    name = ""
-    for feature in ALL_FEATURES:
-        if feature in features_to_use:
-            name += '-' + str(feature)
+#     # get suffix for file names
+#     name = ""
+#     for feature in ALL_FEATURES:
+#         if feature in features_to_use:
+#             name += '-' + str(feature)
         
-    # if folder doesn't exist then create
-    data_path = FEATURE_PREFIX + str(model) + '/data'
-    if not os.path.isdir(str(data_path)):
-        os.makedirs(str(data_path))
+#     # if folder doesn't exist then create
+#     data_path = FEATURE_PREFIX + str(model) + '/data'
+#     if not os.path.isdir(str(data_path)):
+#         os.makedirs(str(data_path))
         
-    # if folder doesn't exist then create
-    model_path = FEATURE_PREFIX + str(model) + '/model'
-    if not os.path.isdir(str(model_path)):
-        os.makedirs(str(model_path))
+#     # if folder doesn't exist then create
+#     model_path = FEATURE_PREFIX + str(model) + '/model'
+#     if not os.path.isdir(str(model_path)):
+#         os.makedirs(str(model_path))
         
-    # if folder doesn't exist then create
-    results_path = FEATURE_PREFIX + str(model) + '/results'
-    if not os.path.isdir(str(results_path)):
-        os.makedirs(str(results_path))
+#     # if folder doesn't exist then create
+#     results_path = FEATURE_PREFIX + str(model) + '/results'
+#     if not os.path.isdir(str(results_path)):
+#         os.makedirs(str(results_path))
     
-    # Save to csv files for future use
-    X_test.to_csv(data_path + '/X_test' + name + '.csv', index=False)
-    y_test.to_csv(data_path + '/y_test' + name + '.csv', index=False)
-    y_train.to_csv(data_path + '/y_train' + name + '.csv', index=False)
-    X_train.to_csv(data_path + '/X_train' + name + '.csv', index=False)
-    Boards.to_csv(data_path + '/Boards' + name + '.csv', index=False)
+#     # Save to csv files for future use
+#     X_test.to_csv(data_path + '/X_test' + name + '.csv', index=False)
+#     y_test.to_csv(data_path + '/y_test' + name + '.csv', index=False)
+#     y_train.to_csv(data_path + '/y_train' + name + '.csv', index=False)
+#     X_train.to_csv(data_path + '/X_train' + name + '.csv', index=False)
+#     Boards.to_csv(data_path + '/Boards' + name + '.csv', index=False)
     
-    # Encoding the data
-    le = LabelEncoder()
-    y_train = le.fit_transform(y_train)
+#     # Encoding the data
+#     le = LabelEncoder()
+#     y_train = le.fit_transform(y_train)
     
-    print("\n--- TRAINING MODEL ---\n")
+#     print("\n--- TRAINING MODEL ---\n")
     
-    seed = 42
-    np.random.seed(seed)
+#     seed = 42
+#     np.random.seed(seed)
     
-    start_time = time.time()
+#     start_time = time.time()
     
-    if model == 'gb':
-        # create model
-        gb = xgb.XGBClassifier(random_state=seed, enable_categorical=True)
+#     if model == 'gb':
+#         # create model
+#         gb = xgb.XGBClassifier(random_state=seed, enable_categorical=True)
         
-        # fit model
-        gb.fit(X_train, y_train)
+#         # fit model
+#         gb.fit(X_train, y_train)
         
-        # save model to file
-        dump(gb, model_path + '/' + name + '.joblib')
-    elif model == 'ebm':
-        # create model
-        ebm = ExplainableBoostingClassifier(random_state=seed, interactions=0)
+#         # save model to file
+#         dump(gb, model_path + '/' + name + '.joblib')
+#     elif model == 'ebm':
+#         # create model
+#         ebm = ExplainableBoostingClassifier(random_state=seed, interactions=0)
         
-        # fit model
-        ebm.fit(X_train, y_train)
+#         # fit model
+#         ebm.fit(X_train, y_train)
         
-        # save model to file
-        dump(ebm, model_path + '/' + name + '.joblib')
+#         # save model to file
+#         dump(ebm, model_path + '/' + name + '.joblib')
         
-    end_time = time.time()
+#     end_time = time.time()
     
-    print(f'\n--- FINISHED TRAINING ---\n\n--- TIME ELAPSED: {end_time-start_time} ---\n')
-    print("\n--- TESTING MODEL ---\n")
+#     print(f'\n--- FINISHED TRAINING ---\n\n--- TIME ELAPSED: {end_time-start_time} ---\n')
+#     print("\n--- TESTING MODEL ---\n")
     
-    # test the model
-    test_model(model_path, data_path, results_path, name, features_to_use)
+#     # test the model
+#     test_model(model_path, data_path, results_path, name, features_to_use)
 
-def test_model(model_path, data_path, results_path, name, corr_feat):
-    """
-    Makes predictions using trained models and test data
+# def test_model(model_path, data_path, results_path, name, corr_feat):
+#     """
+#     Makes predictions using trained models and test data
 
-    :param model_path: path to model folder
-    :param data_path: path to data folder
-    :param name: name of the file (appended features used)
-    :param corr_feat: list of features to test correlation of e.g. ['w_rating', 'b_rating'] (Must NOT be in features_to_drop)
-    """
+#     :param model_path: path to model folder
+#     :param data_path: path to data folder
+#     :param name: name of the file (appended features used)
+#     :param corr_feat: list of features to test correlation of e.g. ['w_rating', 'b_rating'] (Must NOT be in features_to_drop)
+#     """
     
-    # get test data from train_test_split
-    X_test = pd.read_csv(data_path + '/X_test' + name + '.csv')
-    X_train = pd.read_csv(data_path + '/X_train' + name + '.csv')
-    y_train = pd.read_csv(data_path + '/y_train' + name + '.csv')
-    y_test = pd.read_csv(data_path + '/y_test' + name + '.csv')
-    boards = pd.read_csv(data_path + '/Boards' + name + '.csv')
+#     # get test data from train_test_split
+#     X_test = pd.read_csv(data_path + '/X_test' + name + '.csv')
+#     X_train = pd.read_csv(data_path + '/X_train' + name + '.csv')
+#     y_train = pd.read_csv(data_path + '/y_train' + name + '.csv')
+#     y_test = pd.read_csv(data_path + '/y_test' + name + '.csv')
+#     boards = pd.read_csv(data_path + '/Boards' + name + '.csv')
     
-    # load trained model from file
-    model = load(model_path + '/' + name + '.joblib')
+#     # load trained model from file
+#     model = load(model_path + '/' + name + '.joblib')
     
-    # make predictions with probabilities
-    y_pred = model.predict(X_test)
+#     # make predictions with probabilities
+#     y_pred = model.predict(X_test)
     
-    # Decode
-    le = LabelEncoder()
-    le.fit(y_train.values.ravel())
+#     # Decode
+#     le = LabelEncoder()
+#     le.fit(y_train.values.ravel())
     
-    y_pred = le.inverse_transform(y_pred)
+#     y_pred = le.inverse_transform(y_pred)
     
-    filtered_y_pred = []
-    filtered_y_test = []
-    filtered_boards = []
+#     filtered_y_pred = []
+#     filtered_y_test = []
+#     filtered_boards = []
     
-    boards = list(boards['board_pos'])
-    y_test = list(y_test['next_move_encoded'])
+#     boards = list(boards['board_pos'])
+#     y_test = list(y_test['next_move_encoded'])
             
-    # filter all illegal predictions
-    for i in range(len(y_pred)):
-        if is_legal(boards[i], y_pred[i]):
-            filtered_y_pred.append(y_pred[i])
-            filtered_y_test.append(y_test[i])
-            filtered_boards.append(boards[i])
+#     # filter all illegal predictions
+#     for i in range(len(y_pred)):
+#         if is_legal(boards[i], y_pred[i]):
+#             filtered_y_pred.append(y_pred[i])
+#             filtered_y_test.append(y_test[i])
+#             filtered_boards.append(boards[i])
             
-    # convert to 1D array
-    filtered_y_test = np.array(filtered_y_test)
-    filtered_y_pred = np.array(filtered_y_pred)
+#     # convert to 1D array
+#     filtered_y_test = np.array(filtered_y_test)
+#     filtered_y_pred = np.array(filtered_y_pred)
     
-    # evaluate model
-    precision = precision_score(filtered_y_test, filtered_y_pred, average='weighted', zero_division=0)
-    recall = recall_score(filtered_y_test, filtered_y_pred, average='weighted', zero_division=0)
-    f1 = f1_score(filtered_y_test, filtered_y_pred, average='weighted')
-    accuracy = accuracy_score(filtered_y_test, filtered_y_pred)
+#     # evaluate model
+#     precision = precision_score(filtered_y_test, filtered_y_pred, average='weighted', zero_division=0)
+#     recall = recall_score(filtered_y_test, filtered_y_pred, average='weighted', zero_division=0)
+#     f1 = f1_score(filtered_y_test, filtered_y_pred, average='weighted')
+#     accuracy = accuracy_score(filtered_y_test, filtered_y_pred)
     
-    # write to file
-    with open(results_path + '/' + name + '.txt', 'w') as f:
-        f.write(f'Precision: {precision:.2f}\n')
-        f.write(f'Recall: {recall:.2f}\n')
-        f.write(f'F1-Score: {f1:.2f}\n')
-        f.write(f'Accuracy: {accuracy:.2f}\n')
+#     # write to file
+#     with open(results_path + '/' + name + '.txt', 'w') as f:
+#         f.write(f'Precision: {precision:.2f}\n')
+#         f.write(f'Recall: {recall:.2f}\n')
+#         f.write(f'F1-Score: {f1:.2f}\n')
+#         f.write(f'Accuracy: {accuracy:.2f}\n')
         
-        # check correlation values are in training data
-        valid = True
-        if corr_feat != None:
-            for feat in corr_feat:
-                if feat not in X_train:
-                    valid = False
+#         # check correlation values are in training data
+#         valid = True
+#         if corr_feat != None:
+#             for feat in corr_feat:
+#                 if feat not in X_train:
+#                     valid = False
                     
-        # get correlation of new feature 
-        if valid:
-            new_df = X_train[corr_feat].merge(y_train, left_index=True, right_index=True)
-            corr_train = new_df.corr()
-            f.write(f'Correlation of {corr_feat}: \n{corr_train}\n')
+#         # get correlation of new feature 
+#         if valid:
+#             new_df = X_train[corr_feat].merge(y_train, left_index=True, right_index=True)
+#             corr_train = new_df.corr()
+#             f.write(f'Correlation of {corr_feat}: \n{corr_train}\n')
             
-    print(f'Accuracy: {accuracy}\n')
-    print(f'Precision: {precision}\n')
-    print(f'Recall: {recall}\n')
-    print(f'F1-Score: {f1}\n')
+#     print(f'Accuracy: {accuracy}\n')
+#     print(f'Precision: {precision}\n')
+#     print(f'Recall: {recall}\n')
+#     print(f'F1-Score: {f1}\n')
     
 def make_dir(path):
     """
@@ -219,7 +219,7 @@ def make_dir(path):
     if not os.path.isdir(str(path)):
         os.makedirs(str(path))
 
-def split_data(df, test=False):
+def split_data(df):
     """
     Split the dataframe into train and validation (also test if needed)
     
@@ -331,25 +331,22 @@ def pca_analysis(df, plot_type, test=False):
     pca_end = PCA(0.95) # retain 95% of variance
     
     # get values for both models
-    X_train_start, X_val_start, y_train_start, y_val_start, X_train_end, X_val_end, y_train_end, y_val_end, boards_start, boards_end, train_boards_start, train_boards_end = split_data(df, test)
-    
-    # save start square column for model 2 testing
-    start_squares = X_val_end[['start_square']]
+    X_train_start, X_val_start, y_train_start, y_val_start, X_train_end, X_val_end, y_train_end, y_val_end, boards_start, boards_end, train_boards_start, train_boards_end = split_data(df)
 
     
     # ---------------- SCALING & PCA ---------------- #
     
     # apply scaling
     X_train_start = scaler_start.fit_transform(X_train_start)
-    X_val_start = scaler_start.transform(X_val_start)
     X_train_end = scaler_end.fit_transform(X_train_end)
-    X_val_end = scaler_end.transform(X_val_end)
+    X_val_start = scaler_start.transform(X_val_start)
+    # X_val_end = scaler_end.transform(X_val_end)
     
     # apply pca
     X_train_start = pca_start.fit_transform(X_train_start)
-    X_val_start = pca_start.transform(X_val_start)
     X_train_end = pca_end.fit_transform(X_train_end)
-    X_val_end = pca_end.transform(X_val_end)
+    X_val_start = pca_start.transform(X_val_start)
+    # X_val_end = pca_end.transform(X_val_end)
     
     # ---------------- PLOT PCA ---------------- #
     
@@ -366,7 +363,8 @@ def pca_analysis(df, plot_type, test=False):
     labels_end = ['PC' + str(x) for x in range(1, len(per_var_end)+1)]
     
     # plot the pca
-    plot_pca(pca_start, pca_end, plot_type, per_var_start, per_var_end, prop_var_start, prop_var_end, labels_start, labels_end)
+    if plot_type:
+        plot_pca(pca_start, pca_end, plot_type, per_var_start, per_var_end, prop_var_start, prop_var_end, labels_start, labels_end)
     
     
     # ---------------- GET N COMPONENTS FROM USER ---------------- #
@@ -380,9 +378,6 @@ def pca_analysis(df, plot_type, test=False):
     # if folder doesn't exist then create
     pca_path = f'{PCA_PREFIX}/{str(num_comps_start)}_{str(num_comps_end)}/'
     make_dir(pca_path)
-    
-    # save starting squares for model 2 testing
-    start_squares.to_csv(pca_path + f'start_squares.csv', index=False)
     
     # check number given is valid, if not set to max or min
     if num_comps_start > pca_start.n_components_:
@@ -410,7 +405,7 @@ def pca_analysis(df, plot_type, test=False):
     pca_train_start = X_train_start[:, :num_comps_start]
     pca_train_end = X_train_end[:, :num_comps_end]
     pca_val_start = X_val_start[:, :num_comps_start]
-    pca_val_end = X_val_end[:, :num_comps_end]
+    # pca_val_end = X_val_end[:, :num_comps_end]
 
     
     # ---------------- CREATE DATAFRAME ---------------- #
@@ -420,7 +415,7 @@ def pca_analysis(df, plot_type, test=False):
     df_train_end = pd.DataFrame(pca_train_end, columns=[f'PC{i+1}' for i in range(num_comps_end)])
     
     df_val_start = pd.DataFrame(pca_val_start, columns=[f'PC{i+1}' for i in range(num_comps_start)])
-    df_val_end = pd.DataFrame(pca_val_end, columns=[f'PC{i+1}' for i in range(num_comps_end)])
+    # df_val_end = pd.DataFrame(pca_val_end, columns=[f'PC{i+1}' for i in range(num_comps_end)])
     
     # ---------------- SAVE VARIABLES TO FILE ---------------- #
     
@@ -432,7 +427,7 @@ def pca_analysis(df, plot_type, test=False):
     df_train_start.to_csv(pca_path + f'X_train_start.csv', index=False)
     df_train_end.to_csv(pca_path + f'X_train_end.csv', index=False)
     df_val_start.to_csv(pca_path + f'X_val_start.csv', index=False)
-    df_val_end.to_csv(pca_path + f'X_val_end.csv', index=False)
+    X_val_end.to_csv(pca_path + f'X_val_end.csv', index=False)
     
     # Save PCA and Scaler for future predictions
     dump(pca_start, pca_path + 'pca_start.joblib')
