@@ -363,11 +363,17 @@ def tune_hyper(X_train, y_train, X_val, y_val, train_boards_start, model_name):
     # ---------------- DEFINE MODEL SPECIFIC PARAMETERS ---------------- #
     dt_params = {}
     
-    gb_params = {
-        'learning_rate': [0.0001, 1],
-        'max_depth': [1, 15],
-        'n_estimators': [10, 1000],
-        'min_child_weight': [1, 15],
+    gb_params_start = {
+        'learning_rate': [0.001, 0.01],
+        'max_depth': [10, 12],
+        'min_child_weight': [1, 2],
+        'n_estimators': [500, 750],
+    }
+    gb_params_end = {
+        'learning_rate': [0.001, 0.01],
+        'max_depth': [10, 12],
+        'min_child_weight': [1, 2],
+        'n_estimators': [500, 750],
     }
     
     ebm_params = {}
@@ -414,8 +420,8 @@ def tune_hyper(X_train, y_train, X_val, y_val, train_boards_start, model_name):
             # create model
             model_start = xgb.XGBClassifier(random_state=42, enable_categorical=True)
             model_end = xgb.XGBClassifier(random_state=42, enable_categorical=True)
-            grid_search_start = GridSearchCV(model_start, gb_params, cv=5, verbose=2, scoring=score_function_start)
-            grid_search_end = GridSearchCV(model_end, gb_params, cv=5, verbose=2, scoring=score_function_end)
+            grid_search_start = GridSearchCV(model_start, gb_params_start, cv=5, verbose=2, scoring=score_function_start)
+            grid_search_end = GridSearchCV(model_end, gb_params_end, cv=5, verbose=2, scoring=score_function_end)
             
         case 'ebm':
             # create model
@@ -432,7 +438,7 @@ def tune_hyper(X_train, y_train, X_val, y_val, train_boards_start, model_name):
     
     # write to files
     with open(f"../hyperparameters/{model_name}_start.txt", "a") as f:
-        f.write(f"\nParameters Tested: {gb_params}\nBest Parameters: {best_params_start}\nBest Mean CV Score: {best_score_start}\n--------------------")         
+        f.write(f"\nParameters Tested: {gb_params_start}\nBest Parameters: {best_params_start}\nBest Mean CV Score: {best_score_start}\n--------------------")         
         
     # print results     
     print(f"\nModel 1 Best Hyperparameters:\n{best_params_start}")
@@ -444,7 +450,7 @@ def tune_hyper(X_train, y_train, X_val, y_val, train_boards_start, model_name):
 
     # write to files
     with open(f"../hyperparameters/{model_name}_end.txt", "a") as f:
-        f.write(f"\nParameters Tested: {gb_params}\nBest Parameters: {best_params_end}\nBest Mean CV Score: {best_score_end}\n--------------------")         
+        f.write(f"\nParameters Tested: {gb_params_end}\nBest Parameters: {best_params_end}\nBest Mean CV Score: {best_score_end}\n--------------------")         
 
     # print results     
     print(f"\nModel 2 Best Hyperparameters:\n{best_params_end}")

@@ -327,8 +327,8 @@ def pca_analysis(df, plot_type, test=False):
     scaler_start = StandardScaler()
     scaler_end = StandardScaler()
     # PCA
-    pca_start = PCA(0.95) # retain 95% of variance
-    pca_end = PCA(0.95) # retain 95% of variance
+    pca_start_vis = PCA(0.95) # retain 95% of variance
+    pca_end_vis = PCA(0.95) # retain 95% of variance
     
     # get values for both models
     X_train_start, X_val_start, y_train_start, y_val_start, X_train_end, X_val_end, y_train_end, y_val_end, boards_start, boards_end, train_boards_start, train_boards_end = split_data(df)
@@ -340,23 +340,21 @@ def pca_analysis(df, plot_type, test=False):
     X_train_start = scaler_start.fit_transform(X_train_start)
     X_train_end = scaler_end.fit_transform(X_train_end)
     X_val_start = scaler_start.transform(X_val_start)
-    # X_val_end = scaler_end.transform(X_val_end)
     
     # apply pca
-    X_train_start = pca_start.fit_transform(X_train_start)
-    X_train_end = pca_end.fit_transform(X_train_end)
-    X_val_start = pca_start.transform(X_val_start)
-    # X_val_end = pca_end.transform(X_val_end)
+    pca_start_vis.fit(X_train_start)
+    pca_end_vis.fit(X_train_end)
+    
     
     # ---------------- PLOT PCA ---------------- #
     
     # variance for bar and elbow plot
     #TODO
-    per_var_start = np.round(pca_start.explained_variance_ratio_ * 100, decimals=1)
-    per_var_end = np.round(pca_end.explained_variance_ratio_ * 100, decimals=1)
+    per_var_start = np.round(pca_start_vis.explained_variance_ratio_ * 100, decimals=1)
+    per_var_end = np.round(pca_end_vis.explained_variance_ratio_ * 100, decimals=1)
     
-    prop_var_start = pca_start.explained_variance_ratio_
-    prop_var_end = pca_end.explained_variance_ratio_
+    prop_var_start = pca_start_vis.explained_variance_ratio_
+    prop_var_end = pca_end_vis.explained_variance_ratio_
     
     # labels for plot
     labels_start = ['PC' + str(x) for x in range(1, len(per_var_start)+1)]
@@ -364,15 +362,15 @@ def pca_analysis(df, plot_type, test=False):
     
     # plot the pca
     if plot_type:
-        plot_pca(pca_start, pca_end, plot_type, per_var_start, per_var_end, prop_var_start, prop_var_end, labels_start, labels_end)
+        plot_pca(pca_start_vis, pca_end_vis, plot_type, per_var_start, per_var_end, prop_var_start, prop_var_end, labels_start, labels_end)
     
     
     # ---------------- GET N COMPONENTS FROM USER ---------------- #
     
     # number of components to use
-    num_comps_start = input(f'\nEnter the number of components to save for plot 1 (MAX={pca_start.n_components_}): ')
+    num_comps_start = input(f'\nEnter the number of components to save for plot 1 (MAX={pca_start_vis.n_components_}): ')
     num_comps_start = int(num_comps_start)
-    num_comps_end = input(f'\nEnter the number of components to save for plot 2 (MAX={pca_end.n_components_}): ')
+    num_comps_end = input(f'\nEnter the number of components to save for plot 2 (MAX={pca_end_vis.n_components_}): ')
     num_comps_end = int(num_comps_end)
     
     # if folder doesn't exist then create
@@ -380,12 +378,12 @@ def pca_analysis(df, plot_type, test=False):
     make_dir(pca_path)
     
     # check number given is valid, if not set to max or min
-    if num_comps_start > pca_start.n_components_:
-        print(f'ERROR: Number of components invalid.\nSetting to MAX={pca_start.n_components_}')
-        num_comps_start = pca_start.n_components_
-    elif num_comps_end > pca_end.n_components_:
-        print(f'ERROR: Number of components invalid.\nSetting to MAX={pca_end.n_components_}')
-        num_comps_end = pca_end.n_components_
+    if num_comps_start > pca_start_vis.n_components_:
+        print(f'ERROR: Number of components invalid.\nSetting to MAX={pca_start_vis.n_components_}')
+        num_comps_start = pca_start_vis.n_components_
+    elif num_comps_end > pca_end_vis.n_components_:
+        print(f'ERROR: Number of components invalid.\nSetting to MAX={pca_end_vis.n_components_}')
+        num_comps_end = pca_end_vis.n_components_
     elif num_comps_start <= 0:
         print(f'ERROR: Number of components invalid.\nSetting to MIN=1')
         num_comps_start = 1
@@ -401,11 +399,17 @@ def pca_analysis(df, plot_type, test=False):
     boards_end.to_csv(pca_path + 'boards_end.csv', index=False)
         
             
-    # get correct number of components
-    pca_train_start = X_train_start[:, :num_comps_start]
-    pca_train_end = X_train_end[:, :num_comps_end]
-    pca_val_start = X_val_start[:, :num_comps_start]
-    # pca_val_end = X_val_end[:, :num_comps_end]
+    # create PCA with correct number of components
+    pca_start = PCA(n_components=5)
+    pca_end = PCA(n_components=5)
+    pca_start = pca_start.fit(X_train_start)
+    pca_end = pca_end.fit(X_train_end)
+    print("Number of components in pca_final:", pca_start.n_components_)
+
+    pca_train_start = pca_start.transform(X_train_start)
+    pca_val_start = pca_start.transform(X_val_start)
+    pca_train_end = pca_end.transform(X_train_end)
+    
 
     
     # ---------------- CREATE DATAFRAME ---------------- #
@@ -428,6 +432,7 @@ def pca_analysis(df, plot_type, test=False):
     df_train_end.to_csv(pca_path + f'X_train_end.csv', index=False)
     df_val_start.to_csv(pca_path + f'X_val_start.csv', index=False)
     X_val_end.to_csv(pca_path + f'X_val_end.csv', index=False)
+
     
     # Save PCA and Scaler for future predictions
     dump(pca_start, pca_path + 'pca_start.joblib')

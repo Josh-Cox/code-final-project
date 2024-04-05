@@ -3,3 +3,11 @@ Parameters Tested: {'learning_rate': [0.0001, 1], 'max_depth': [1, 15], 'n_estim
 Best Parameters: {'learning_rate': 0.0001, 'max_depth': 15, 'min_child_weight': 1, 'n_estimators': 1000}
 Best Mean CV Score: 0.10413348155676172
 --------------------
+Parameters Tested: {'learning_rate': [0.0001, 0.01], 'max_depth': [10, 15], 'n_estimators': [500, 1000], 'min_child_weight': [1, 5]}
+Best Parameters: {'learning_rate': 0.01, 'max_depth': 10, 'min_child_weight': 1, 'n_estimators': 500}
+Best Mean CV Score: 0.10545284050566836
+--------------------
+Parameters Tested: {'learning_rate': [0.001, 0.01], 'max_depth': [10, 12], 'min_child_weight': [1, 2], 'n_estimators': [500, 750]}
+Best Parameters: {'learning_rate': 0.001, 'max_depth': 12, 'min_child_weight': 1, 'n_estimators': 500}
+Best Mean CV Score: 0.10723445757745367
+--------------------
