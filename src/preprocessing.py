@@ -572,8 +572,8 @@ def create_model_input(game, k_safety_method, testing_move_number=-1, turn=1):
     if game is None:
         return -1
     
-    if not re.search(r"600[^\d]*", game.headers["TimeControl"]):
-        return -2
+    # if not re.search(r"600[^\d]*", game.headers["TimeControl"]):
+    #     return -2
     
     # get board position and next move
     temp = get_random_pos(game, testing_move_number, turn)

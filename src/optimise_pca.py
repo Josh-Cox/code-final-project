@@ -49,9 +49,10 @@ def create_pca(df, num_comps_start, num_comps_end):
     # scaler
     scaler_start = StandardScaler()
     scaler_end = StandardScaler()
-    # PCA
-    pca_start = PCA(0.95) # retain 95% of variance
-    pca_end = PCA(0.95) # retain 95% of variance
+    
+    # pca
+    pca_start = PCA(n_components=num_comps_start)
+    pca_end = PCA(n_components=num_comps_end)
     
     # get values for both models
     X_train_start, X_val_start, y_train_start, y_val_start, X_train_end, X_val_end, y_train_end, y_val_end, boards_start, boards_end, train_boards_start, train_boards_end = split_data(df)
@@ -66,13 +67,15 @@ def create_pca(df, num_comps_start, num_comps_end):
     X_train_start = scaler_start.fit_transform(X_train_start)
     X_train_end = scaler_end.fit_transform(X_train_end)
     X_val_start = scaler_start.transform(X_val_start)
-    # X_val_end = scaler_end.transform(X_val_end)
     
+                
     # apply pca
-    X_train_start = pca_start.fit_transform(X_train_start)
-    X_train_end = pca_end.fit_transform(X_train_end)
-    X_val_start = pca_start.transform(X_val_start)
-    # X_val_end = pca_end.transform(X_val_end)
+    pca_start = pca_start.fit(X_train_start)
+    pca_end = pca_end.fit(X_train_end)
+    
+    pca_train_start = pca_start.transform(X_train_start)
+    pca_val_start = pca_start.transform(X_val_start)
+    pca_train_end = pca_end.transform(X_train_end)
 
     # if folder doesn't exist then create
     pca_path = f'{PCA_PREFIX}/{str(num_comps_start)}_{str(num_comps_end)}/'
@@ -102,14 +105,6 @@ def create_pca(df, num_comps_start, num_comps_end):
     boards_start.to_csv(pca_path + 'boards_start.csv', index=False)
     boards_end.to_csv(pca_path + 'boards_end.csv', index=False)
         
-            
-    # get correct number of components
-    pca_train_start = X_train_start[:, :num_comps_start]
-    pca_train_end = X_train_end[:, :num_comps_end]
-    pca_val_start = X_val_start[:, :num_comps_start]
-    # pca_val_end = X_val_end[:, :num_comps_end]
-
-    
     # ---------------- CREATE DATAFRAME ---------------- #
     
     # generate dataframe
@@ -141,8 +136,8 @@ def main():
     # ---------------- ARGUMENT HANDLING ---------------- #
     parser = argparse.ArgumentParser(description="Run PCA range on certain models")
     parser.add_argument('--model', choices=['dt', 'gb', 'ebm'], required=True, help='Model to train')
-    parser.add_argument('--comps_1', required=False, help='Number of components to train model 1 with (folder must exist under "PCA/")')
-    parser.add_argument('--comps_2', required=False, help='Number of components to train model 2 with (folder must exist under "PCA/")')
+    parser.add_argument('--comps_1', nargs='+', required=False, help='Number of components to train model 1 with (folder must exist under "PCA/")')
+    parser.add_argument('--comps_2', nargs='+', required=False, help='Number of components to train model 2 with (folder must exist under "PCA/")')
     parser.add_argument('--n_comps', nargs='+', required=False, help='List of number of components to train models with E.g. --n_comps 1 5 10 15')
     parser.add_argument('--file', type=str, required=True, help="CSV file to use (excluding extensions)")
     args = parser.parse_args()
@@ -176,6 +171,12 @@ def main():
             create_pca(df, int(num), int(num))
             acc_dict[f"{num}_{num}"] = train_models(args.model, int(num), int(num))
             
+    else:
+        for num1 in args.comps_1:
+            for num2 in args.comps_2:
+                create_pca(df, int(num1), int(num2))
+                acc_dict[f"{num1}_{num2}"] = train_models(args.model, int(num1), int(num2))
+            
     # get the best accuracy
     best_acc, best_num = 0, ""
     for key, item in acc_dict.items():
@@ -183,7 +184,7 @@ def main():
             best_acc = item
             best_num = key
             
-    print(f"Best Accuracy: {best_acc} with {best_num} PCA components")
+    print(f"\nBest Accuracy: {best_acc} with {best_num} PCA components")
     
     
 

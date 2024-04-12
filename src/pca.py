@@ -323,6 +323,8 @@ def pca_analysis(df, plot_type, test=False):
     
     # ---------------- DEFINE VARIABLES ---------------- #
     
+    df.dropna(inplace=True)
+    
     # scaler
     scaler_start = StandardScaler()
     scaler_end = StandardScaler()
@@ -332,7 +334,7 @@ def pca_analysis(df, plot_type, test=False):
     
     # get values for both models
     X_train_start, X_val_start, y_train_start, y_val_start, X_train_end, X_val_end, y_train_end, y_val_end, boards_start, boards_end, train_boards_start, train_boards_end = split_data(df)
-
+    X_val_start.to_csv('../PCA/4_2/X_test_start_og.csv', index=False)
     
     # ---------------- SCALING & PCA ---------------- #
     
@@ -400,11 +402,16 @@ def pca_analysis(df, plot_type, test=False):
         
             
     # create PCA with correct number of components
-    pca_start = PCA(n_components=5)
-    pca_end = PCA(n_components=5)
+    pca_start = PCA(n_components=num_comps_start)
+    pca_end = PCA(n_components=num_comps_end)
     pca_start = pca_start.fit(X_train_start)
     pca_end = pca_end.fit(X_train_end)
-    print("Number of components in pca_final:", pca_start.n_components_)
+    
+    # Save PCA and Scaler for future predictions
+    dump(pca_start, pca_path + 'pca_start.joblib')
+    dump(scaler_start, pca_path + 'scaler_start.joblib')
+    dump(pca_end, pca_path + 'pca_end.joblib')
+    dump(scaler_end, pca_path + 'scaler_end.joblib')
 
     pca_train_start = pca_start.transform(X_train_start)
     pca_val_start = pca_start.transform(X_val_start)
@@ -432,13 +439,6 @@ def pca_analysis(df, plot_type, test=False):
     df_train_end.to_csv(pca_path + f'X_train_end.csv', index=False)
     df_val_start.to_csv(pca_path + f'X_val_start.csv', index=False)
     X_val_end.to_csv(pca_path + f'X_val_end.csv', index=False)
-
-    
-    # Save PCA and Scaler for future predictions
-    dump(pca_start, pca_path + 'pca_start.joblib')
-    dump(scaler_start, pca_path + 'scaler_start.joblib')
-    dump(pca_end, pca_path + 'pca_end.joblib')
-    dump(scaler_end, pca_path + 'scaler_end.joblib')
 
 def main():
     

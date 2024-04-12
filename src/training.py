@@ -21,7 +21,7 @@ from interpret import set_visualize_provider
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import accuracy_score, make_scorer, precision_score, recall_score, f1_score
-from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import GridSearchCV, RandomizedSearchCV, cross_val_score, KFold
 from skopt import BayesSearchCV
 from skopt.space import Integer, Real
 
@@ -108,10 +108,6 @@ def train_models(model_name, comps_start, comps_end, batch=None, hyper=False, en
     # X_val_start = pca_start.transform(X_val_start)
     X_val_end = pca_end.transform(X_val_end)
     
-    # get corect number of components
-    # X_val_start = X_val_start[:, :comps_start]
-    X_val_end = X_val_end[:, :int(comps_end)]
-    
     # convert to dataframe
     # X_val_start = pd.DataFrame(X_val_start, columns=[f'PC{i+1}' for i in range(comps_start)])
     X_val_end = pd.DataFrame(X_val_end, columns=[f'PC{i+1}' for i in range(int(comps_end))])
@@ -160,8 +156,32 @@ def train_models(model_name, comps_start, comps_end, batch=None, hyper=False, en
                 model_end = DecisionTreeClassifier(random_state=42)
                 model_start, model_end = train_model(X_train_start, X_train_end, y_train_start, y_train_end, model_start, model_end)
             case 'gb':
-                model_start = xgb.XGBClassifier(random_state=42, enable_categorical=True)
-                model_end = xgb.XGBClassifier(random_state=42, enable_categorical=True)
+                start_params = {
+                    'learning_rate': 0.0012,
+                    'max_depth': 8,
+                    'min_child_weight': 2,
+                    'random_state': 42,
+                    'enable_categorical': True,
+                }
+                # start_params = {
+                #     'learning_rate': 0.3,
+                #     'max_depth': 6,
+                #     'min_child_weight': 1,
+                # }
+                # end_params = {
+                #     'learning_rate': 0.3,
+                #     'max_depth': 6,
+                #     'min_child_weight': 1,
+                # }
+                end_params = {
+                    'learning_rate': 0.041,
+                    'max_depth': 2,
+                    'min_child_weight': 12,
+                    'random_state': 42,
+                    'enable_categorical': True,
+                }
+                model_start = xgb.XGBClassifier(**start_params)
+                model_end = xgb.XGBClassifier(**end_params)
                 model_start, model_end = train_model(X_train_start, X_train_end, y_train_start, y_train_end, model_start, model_end)
             case 'ebm':
                 if batch: 
@@ -251,9 +271,6 @@ def train_models(model_name, comps_start, comps_end, batch=None, hyper=False, en
     X_val_end_og = scaler_end.transform(X_val_end_og)
     X_val_end_og = pca_end.transform(X_val_end_og)
     
-    # get correct number of components
-    X_val_end_og = X_val_end_og[:, :int(comps_end)]
-    
     # make predictions
     preds = model_end.predict(X_val_end_og)
     
@@ -281,12 +298,11 @@ def train_models(model_name, comps_start, comps_end, batch=None, hyper=False, en
     f1 = f1_score(filtered_acc, filtered_preds, average='weighted')
     precision = precision_score(filtered_acc, filtered_preds, average='weighted', zero_division=0)
     recall = recall_score(filtered_acc, filtered_preds, average='weighted', zero_division=0)
-    
         
     # end time for training model
     end_time = time.time()
     
-    print(f'\n--- FINISHED TRAINING ---\n\n--- TIME ELAPSED: {end_time - start_time} ---\n')
+    print(f'\n--- FINISHED TRAINING ---\n\n--- TIME ELAPSED: {end_time - start_time} ---')
 
     # output scores
     print(f"\nModel 1 Score: {acc_start}\nModel 2 Score: {acc_end}\nCombined Model Score: {acc_overall}")
@@ -364,16 +380,22 @@ def tune_hyper(X_train, y_train, X_val, y_val, train_boards_start, model_name):
     dt_params = {}
     
     gb_params_start = {
-        'learning_rate': [0.001, 0.01],
-        'max_depth': [10, 12],
+        'learning_rate': [0.3, 0.0012],
+        'max_depth': [6, 8],
         'min_child_weight': [1, 2],
-        'n_estimators': [500, 750],
     }
     gb_params_end = {
-        'learning_rate': [0.001, 0.01],
-        'max_depth': [10, 12],
-        'min_child_weight': [1, 2],
-        'n_estimators': [500, 750],
+        'learning_rate': [0.041],
+        'max_depth': [2],
+        'min_child_weight': [12],
+    }
+    
+    gb_bayes_params = {
+        'learning_rate': Real(0.01, 1.0, 'log-uniform'),
+        'max_depth': Integer(1, 20),
+        'min_child_weight': Integer(1, 20),
+        'n_estimators': Integer(10, 1000),
+        'gamma': Real(0, 10, 'uniform')
     }
     
     ebm_params = {}
@@ -411,27 +433,29 @@ def tune_hyper(X_train, y_train, X_val, y_val, train_boards_start, model_name):
     # use correct model
     match model_name:
         case 'dt': 
-            # create model
             model_start = DecisionTreeClassifier(random_state=42)
             model_end = DecisionTreeClassifier(random_state=42)
             grid_search_start = GridSearchCV(model_start, dt_params, cv=5, verbose=2, scoring=score_function_start)
             grid_search_end = GridSearchCV(model_end, dt_params, cv=5, verbose=2, scoring=score_function_end)
         case 'gb': 
-            # create model
+            # opt_start = BayesSearchCV(xgb.XGBClassifier(enable_categorical=True), gb_bayes_params, n_iter=50, cv=5, random_state=42, verbose=3, scoring=score_function_start)
+            # opt_end = BayesSearchCV(xgb.XGBClassifier(enable_categorical=True), gb_bayes_params, n_iter=50, cv=5, random_state=42, verbose=3, scoring=score_function_end)
             model_start = xgb.XGBClassifier(random_state=42, enable_categorical=True)
             model_end = xgb.XGBClassifier(random_state=42, enable_categorical=True)
             grid_search_start = GridSearchCV(model_start, gb_params_start, cv=5, verbose=2, scoring=score_function_start)
             grid_search_end = GridSearchCV(model_end, gb_params_end, cv=5, verbose=2, scoring=score_function_end)
             
         case 'ebm':
-            # create model
             model_start = ExplainableBoostingClassifier(random_state=42, n_jobs=-2, interactions=0) 
             model_end = ExplainableBoostingClassifier(random_state=42, n_jobs=-2, interactions=0) 
             grid_search_start = GridSearchCV(model_start, ebm_params, cv=5, verbose=2, scoring=score_function_start)
             grid_search_end = GridSearchCV(model_end, ebm_params, cv=5, verbose=2, scoring=score_function_end)
     
     # ---------------- TRAIN MODELS AND SAVE BEST ---------------- #
-    
+
+    # opt_start.fit(X_train, y_train)
+    # best_params_start = opt_start.best_params_
+    # best_score_start = opt_start.best_score_
     grid_search_start.fit(X_train, y_train)
     best_params_start = grid_search_start.best_params_
     best_score_start = grid_search_start.best_score_
@@ -444,6 +468,9 @@ def tune_hyper(X_train, y_train, X_val, y_val, train_boards_start, model_name):
     print(f"\nModel 1 Best Hyperparameters:\n{best_params_start}")
     print(f"\nModel 1 Mean CV Score: {best_score_start}\n")
 
+    # opt_end.fit(X_train, y_train)
+    # best_params_end = opt_end.best_params_
+    # best_score_end = opt_end.best_score_
     grid_search_end.fit(X_train, y_train)
     best_params_end = grid_search_end.best_params_
     best_score_end = grid_search_end.best_score_

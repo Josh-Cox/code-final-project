@@ -1,0 +1,9 @@
+
+Parameters Tested: {'learning_rate': [0.0001, 0.5], 'max_depth': [1, 15], 'min_child_weight': [1, 15], 'n_estimators': [10, 1000]}
+Best Parameters: OrderedDict({'gamma': 2.046708962048051, 'learning_rate': 0.19434453426288456, 'max_depth': 12, 'min_child_weight': 11, 'n_estimators': 955})
+Best Mean CV Score: 0.09130638721775626
+--------------------
+Parameters Tested: {'learning_rate': [0.0001, 0.5], 'max_depth': [1, 15], 'min_child_weight': [1, 15], 'n_estimators': [10, 1000]}
+Best Parameters: OrderedDict({'gamma': 0.06081071930248429, 'learning_rate': 0.07617511041746211, 'max_depth': 8, 'min_child_weight': 19, 'n_estimators': 977})
+Best Mean CV Score: 0.09076364907925764
+--------------------
