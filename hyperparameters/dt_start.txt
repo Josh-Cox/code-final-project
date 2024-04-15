@@ -1,0 +1,6 @@
+MODEL: dt
+
+Parameters Tested: {'learning_rate': Real(low=0.01, high=1.0, prior='log-uniform', transform='identity'), 'max_depth': Integer(low=1, high=20, prior='uniform', transform='identity'), 'min_child_weight': Integer(low=1, high=20, prior='uniform', transform='identity'), 'gamma': Real(low=0, high=10, prior='uniform', transform='identity')}
+Best Parameters: OrderedDict({'criterion': 'gini', 'max_depth': 11, 'max_features': 47, 'min_samples_leaf': 20, 'min_samples_split': 2})
+Best Mean CV Score: 0.13335
+--------------------

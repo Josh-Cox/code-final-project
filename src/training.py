@@ -74,6 +74,10 @@ def train_models(model_name, comps_start, comps_end, batch=None, hyper=False, en
     global start_squares
     start_squares = list(y_train_start['start_square'])
     
+    combined_boards_start = pd.concat([train_boards_start, boards_start], ignore_index=True)
+    combined_boards_end = pd.concat([train_boards_end, boards_end], ignore_index=True)
+    
+    
     # ---------------- CREATE DIRECTORIES ---------------- #
     
     if batch:
@@ -126,10 +130,16 @@ def train_models(model_name, comps_start, comps_end, batch=None, hyper=False, en
     # fit encoder
     le_start.fit(combined_data_start)
     le_end.fit(combined_data_end)
+    
     # encode
     y_train_start = le_start.transform(y_train_start)
     y_train_end = le_end.transform(y_train_end)
     
+    combined_y_start = le_start.transform(combined_data_start)
+    combined_y_end = le_end.transform(combined_data_end)
+
+    combined_X_start = pd.concat([X_train_start, X_val_start], ignore_index=True)
+    combined_X_end = pd.concat([X_train_end, X_val_end], ignore_index=True)
     
     # save label encoder classes for later use
     # np.save(f"{MODEL_PREFIX}{str(model_name)}/{str(model_name)}_{comps_start}_{comps_end}/classes_start.npy", le_start.classes_)
@@ -146,7 +156,7 @@ def train_models(model_name, comps_start, comps_end, batch=None, hyper=False, en
     
     # if tuning hyperparameters
     if hyper: 
-        tune_hyper(X_train_start, y_train_start, X_val_start, y_val_start, train_boards_start, model_name)
+        tune_hyper(combined_X_start, combined_X_end, combined_y_start, combined_y_end, combined_boards_start, combined_boards_end, model_name)
         exit()
     else:
         # create and train correct model
@@ -157,26 +167,18 @@ def train_models(model_name, comps_start, comps_end, batch=None, hyper=False, en
                 model_start, model_end = train_model(X_train_start, X_train_end, y_train_start, y_train_end, model_start, model_end)
             case 'gb':
                 start_params = {
-                    'learning_rate': 0.0012,
-                    'max_depth': 8,
-                    'min_child_weight': 2,
+                    'learning_rate': 0.07024314447358557,
+                    'max_depth': 13,
+                    'min_child_weight': 1,
+                    'gamma': 2.352208403256953,
                     'random_state': 42,
                     'enable_categorical': True,
                 }
-                # start_params = {
-                #     'learning_rate': 0.3,
-                #     'max_depth': 6,
-                #     'min_child_weight': 1,
-                # }
-                # end_params = {
-                #     'learning_rate': 0.3,
-                #     'max_depth': 6,
-                #     'min_child_weight': 1,
-                # }
                 end_params = {
-                    'learning_rate': 0.041,
-                    'max_depth': 2,
-                    'min_child_weight': 12,
+                    'learning_rate': 0.012081004159771277,
+                    'max_depth': 8,
+                    'min_child_weight': 1,
+                    'gamma': 5.778223716405115,
                     'random_state': 42,
                     'enable_categorical': True,
                 }
@@ -217,6 +219,7 @@ def train_models(model_name, comps_start, comps_end, batch=None, hyper=False, en
                     model_start = ExplainableBoostingClassifier(random_state=42, n_jobs=-2, interactions=0) 
                     model_end = ExplainableBoostingClassifier(random_state=42, n_jobs=-2, interactions=0) 
                     model_start, model_end = train_model(X_train_start, X_train_end, y_train_start, y_train_end, model_start, model_end)
+
     
     # save model to file
     dump(model_start, model_path + '/model_start.joblib')
@@ -233,7 +236,8 @@ def train_models(model_name, comps_start, comps_end, batch=None, hyper=False, en
     boards_end = list(boards_end['board_pos'])
     y_val_start = list(y_val_start['start_square'])
     y_val_end = list(y_val_end['end_square'])
-
+    
+    
     # create legal predictions lists
     filtered_pred_start = []
     filtered_val_start = []
@@ -307,6 +311,8 @@ def train_models(model_name, comps_start, comps_end, batch=None, hyper=False, en
     # output scores
     print(f"\nModel 1 Score: {acc_start}\nModel 2 Score: {acc_end}\nCombined Model Score: {acc_overall}")
     
+    print(f"F1-Score: {f1}\nPrecision: {precision}\nRecall: {recall}")
+    
     # save scores to file
     with open(f"{model_path}/results.txt", "w") as f:
         f.write(f"Accuracy: {acc_overall}\nF1-Score: {f1}\nPrecision: {precision}\nRecall: {recall}")
@@ -315,12 +321,11 @@ def train_models(model_name, comps_start, comps_end, batch=None, hyper=False, en
     
 def score_function_start(model, X, y):
     
+    boards = X['board_pos']
+    X = X.drop(coulumns=['board_pos'])
+    
     # predict
     preds = model.predict(X)
-    
-    # convert to lists
-    global train_boards_start
-    boards = list(train_boards_start['board_pos'])
 
     # create legal predictions lists
     filtered_pred = []
@@ -334,7 +339,9 @@ def score_function_start(model, X, y):
             filtered_acc.append(y[i])
     
     # return accuracy
-    return accuracy_score(filtered_acc, filtered_pred)
+    accuracy_s = accuracy_score(filtered_acc, filtered_pred)
+    print(accuracy_s)
+    return accuracy_s
 
 def score_function_end(model, X, y):
     
@@ -364,7 +371,7 @@ def score_function_end(model, X, y):
     return acc
         
 
-def tune_hyper(X_train, y_train, X_val, y_val, train_boards_start, model_name):
+def tune_hyper(X_start, X_end, y_start, y_end, combined_boards_start, combined_boards_end, model_name):
     """
     Trains models with different hyper parameters and records accuracy
     
@@ -377,24 +384,18 @@ def tune_hyper(X_train, y_train, X_val, y_val, train_boards_start, model_name):
     """
     
     # ---------------- DEFINE MODEL SPECIFIC PARAMETERS ---------------- #
-    dt_params = {}
-    
-    gb_params_start = {
-        'learning_rate': [0.3, 0.0012],
-        'max_depth': [6, 8],
-        'min_child_weight': [1, 2],
-    }
-    gb_params_end = {
-        'learning_rate': [0.041],
-        'max_depth': [2],
-        'min_child_weight': [12],
+    dt_params = {
+        'criterion': ['gini', 'entropy'],
+        'max_depth': Integer(1, 20),
+        'min_samples_split': Integer(2, 20),
+        'min_samples_leaf': Integer(2, 20),
+        'max_features': Integer(2, 60),
     }
     
-    gb_bayes_params = {
+    gb_params = {
         'learning_rate': Real(0.01, 1.0, 'log-uniform'),
         'max_depth': Integer(1, 20),
         'min_child_weight': Integer(1, 20),
-        'n_estimators': Integer(10, 1000),
         'gamma': Real(0, 10, 'uniform')
     }
     
@@ -404,7 +405,6 @@ def tune_hyper(X_train, y_train, X_val, y_val, train_boards_start, model_name):
     
     # convert to array
     # val_boards = list(val_boards['board_pos'])
-    y_val = list(y_val['start_square'])
 
 
     # ---------------- WIPE OUTPUT FILE ---------------- #
@@ -422,7 +422,7 @@ def tune_hyper(X_train, y_train, X_val, y_val, train_boards_start, model_name):
     # f_end.close()
     
     # ---------------- RUN PARAMETER TUNING ---------------- #
-    
+
     # define number of loops (for progress bar)
     print("\nTuning Hyperparameters...")
     
@@ -433,17 +433,11 @@ def tune_hyper(X_train, y_train, X_val, y_val, train_boards_start, model_name):
     # use correct model
     match model_name:
         case 'dt': 
-            model_start = DecisionTreeClassifier(random_state=42)
-            model_end = DecisionTreeClassifier(random_state=42)
-            grid_search_start = GridSearchCV(model_start, dt_params, cv=5, verbose=2, scoring=score_function_start)
-            grid_search_end = GridSearchCV(model_end, dt_params, cv=5, verbose=2, scoring=score_function_end)
+            opt_start = BayesSearchCV(DecisionTreeClassifier(), dt_params, n_iter=50, cv=5, scoring='accuracy', random_state=42, verbose=3)
+            opt_end = BayesSearchCV(DecisionTreeClassifier(), dt_params, n_iter=50, cv=5, scoring='accuracy', random_state=42, verbose=3)
         case 'gb': 
-            # opt_start = BayesSearchCV(xgb.XGBClassifier(enable_categorical=True), gb_bayes_params, n_iter=50, cv=5, random_state=42, verbose=3, scoring=score_function_start)
-            # opt_end = BayesSearchCV(xgb.XGBClassifier(enable_categorical=True), gb_bayes_params, n_iter=50, cv=5, random_state=42, verbose=3, scoring=score_function_end)
-            model_start = xgb.XGBClassifier(random_state=42, enable_categorical=True)
-            model_end = xgb.XGBClassifier(random_state=42, enable_categorical=True)
-            grid_search_start = GridSearchCV(model_start, gb_params_start, cv=5, verbose=2, scoring=score_function_start)
-            grid_search_end = GridSearchCV(model_end, gb_params_end, cv=5, verbose=2, scoring=score_function_end)
+            opt_start = BayesSearchCV(xgb.XGBClassifier(enable_categorical=True), gb_params, n_iter=50, cv=5, scoring='accuracy', random_state=42, verbose=3)
+            opt_end = BayesSearchCV(xgb.XGBClassifier(enable_categorical=True), gb_params, n_iter=50, cv=5, scoring='accuracy', random_state=42, verbose=3)
             
         case 'ebm':
             model_start = ExplainableBoostingClassifier(random_state=42, n_jobs=-2, interactions=0) 
@@ -453,31 +447,27 @@ def tune_hyper(X_train, y_train, X_val, y_val, train_boards_start, model_name):
     
     # ---------------- TRAIN MODELS AND SAVE BEST ---------------- #
 
-    # opt_start.fit(X_train, y_train)
-    # best_params_start = opt_start.best_params_
-    # best_score_start = opt_start.best_score_
-    grid_search_start.fit(X_train, y_train)
-    best_params_start = grid_search_start.best_params_
-    best_score_start = grid_search_start.best_score_
+    opt_start.fit(X_start, y_start)
+    best_params_start = opt_start.best_params_
+    best_score_start = opt_start.best_score_
     
     # write to files
     with open(f"../hyperparameters/{model_name}_start.txt", "a") as f:
-        f.write(f"\nParameters Tested: {gb_params_start}\nBest Parameters: {best_params_start}\nBest Mean CV Score: {best_score_start}\n--------------------")         
+        f.write(f"MODEL: {model_name}\n")
+        f.write(f"\nParameters Tested: {gb_params}\nBest Parameters: {best_params_start}\nBest Mean CV Score: {best_score_start}\n--------------------")         
         
     # print results     
     print(f"\nModel 1 Best Hyperparameters:\n{best_params_start}")
     print(f"\nModel 1 Mean CV Score: {best_score_start}\n")
 
-    # opt_end.fit(X_train, y_train)
-    # best_params_end = opt_end.best_params_
-    # best_score_end = opt_end.best_score_
-    grid_search_end.fit(X_train, y_train)
-    best_params_end = grid_search_end.best_params_
-    best_score_end = grid_search_end.best_score_
+    opt_end.fit(X_end, y_end)
+    best_params_end = opt_end.best_params_
+    best_score_end = opt_end.best_score_
 
     # write to files
     with open(f"../hyperparameters/{model_name}_end.txt", "a") as f:
-        f.write(f"\nParameters Tested: {gb_params_end}\nBest Parameters: {best_params_end}\nBest Mean CV Score: {best_score_end}\n--------------------")         
+        f.write(f"MODEL: {model_name}\n")
+        f.write(f"\nParameters Tested: {gb_params}\nBest Parameters: {best_params_end}\nBest Mean CV Score: {best_score_end}\n--------------------")         
 
     # print results     
     print(f"\nModel 2 Best Hyperparameters:\n{best_params_end}")
