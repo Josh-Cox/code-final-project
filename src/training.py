@@ -396,10 +396,24 @@ def tune_hyper(X_start, X_end, y_start, y_end, combined_boards_start, combined_b
         'learning_rate': Real(0.01, 1.0, 'log-uniform'),
         'max_depth': Integer(1, 20),
         'min_child_weight': Integer(1, 20),
-        'gamma': Real(0, 10, 'uniform')
+        'gamma': Real(0, 10, 'uniform'),
+        'enable_categorical': [True],
     }
     
-    ebm_params = {}
+    ebm_params = {
+        # 'max_bins': [1024, 4096, 16384, 65536],
+        'interactions': [0, 0.25, 0.5, 0.75, 0.95, 5, 10, 25, 50, 100, 250],
+        'validation_size': [0.1, 0.15, 0.2],
+        'learning_rate': [0.02, 0.01, 0.005, 0.0025],
+        'greedy_ratio': [0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 4.0],
+        'cyclic_progress': [0.0, 0.5, 1.0],
+        'smoothing_rounds': [0, 50, 100, 200, 500, 1000, 2000, 4000],
+        'min_samples_leaf': Integer(2, 4),
+        'max_leaves': Integer(3, 4),
+        'random_state': [42],
+        'n_jobs': [-2],
+        'interactions': [0],
+        }
     
     # ---------------- DEFINE VARIABLES ---------------- #
     
@@ -436,29 +450,27 @@ def tune_hyper(X_start, X_end, y_start, y_end, combined_boards_start, combined_b
             opt_start = BayesSearchCV(DecisionTreeClassifier(), dt_params, n_iter=50, cv=5, scoring='accuracy', random_state=42, verbose=3)
             opt_end = BayesSearchCV(DecisionTreeClassifier(), dt_params, n_iter=50, cv=5, scoring='accuracy', random_state=42, verbose=3)
         case 'gb': 
-            opt_start = BayesSearchCV(xgb.XGBClassifier(enable_categorical=True), gb_params, n_iter=50, cv=5, scoring='accuracy', random_state=42, verbose=3)
-            opt_end = BayesSearchCV(xgb.XGBClassifier(enable_categorical=True), gb_params, n_iter=50, cv=5, scoring='accuracy', random_state=42, verbose=3)
+            opt_start = BayesSearchCV(xgb.XGBClassifier(), gb_params, n_iter=50, cv=5, scoring='accuracy', random_state=42, verbose=3)
+            opt_end = BayesSearchCV(xgb.XGBClassifier(), gb_params, n_iter=50, cv=5, scoring='accuracy', random_state=42, verbose=3)
             
         case 'ebm':
-            model_start = ExplainableBoostingClassifier(random_state=42, n_jobs=-2, interactions=0) 
-            model_end = ExplainableBoostingClassifier(random_state=42, n_jobs=-2, interactions=0) 
-            grid_search_start = GridSearchCV(model_start, ebm_params, cv=5, verbose=2, scoring=score_function_start)
-            grid_search_end = GridSearchCV(model_end, ebm_params, cv=5, verbose=2, scoring=score_function_end)
+            opt_start = BayesSearchCV(ExplainableBoostingClassifier() , ebm_params, n_iter=50, cv=5, scoring='accuracy', random_state=42, verbose=3)
+            opt_end = BayesSearchCV(ExplainableBoostingClassifier() , ebm_params, n_iter=50, cv=5, scoring='accuracy', random_state=42, verbose=3)
     
     # ---------------- TRAIN MODELS AND SAVE BEST ---------------- #
 
-    opt_start.fit(X_start, y_start)
-    best_params_start = opt_start.best_params_
-    best_score_start = opt_start.best_score_
+    # opt_start.fit(X_start, y_start)
+    # best_params_start = opt_start.best_params_
+    # best_score_start = opt_start.best_score_
     
-    # write to files
-    with open(f"../hyperparameters/{model_name}_start.txt", "a") as f:
-        f.write(f"MODEL: {model_name}\n")
-        f.write(f"\nParameters Tested: {gb_params}\nBest Parameters: {best_params_start}\nBest Mean CV Score: {best_score_start}\n--------------------")         
+    # # write to files
+    # with open(f"../hyperparameters/{model_name}_start.txt", "a") as f:
+    #     f.write(f"MODEL: {model_name}\n")
+    #     f.write(f"\nParameters Tested: {gb_params}\nBest Parameters: {best_params_start}\nBest Mean CV Score: {best_score_start}\n--------------------")         
         
-    # print results     
-    print(f"\nModel 1 Best Hyperparameters:\n{best_params_start}")
-    print(f"\nModel 1 Mean CV Score: {best_score_start}\n")
+    # # print results     
+    # print(f"\nModel 1 Best Hyperparameters:\n{best_params_start}")
+    # print(f"\nModel 1 Mean CV Score: {best_score_start}\n")
 
     opt_end.fit(X_end, y_end)
     best_params_end = opt_end.best_params_
