@@ -1,5 +1,0 @@
-
-Parameters Tested: {'learning_rate': Real(low=0.01, high=1.0, prior='log-uniform', transform='normalize'), 'max_depth': Integer(low=1, high=20, prior='uniform', transform='normalize'), 'min_child_weight': Integer(low=1, high=20, prior='uniform', transform='normalize'), 'gamma': Real(low=0, high=10, prior='uniform', transform='normalize')}
-Best Parameters: OrderedDict({'gamma': 5.778223716405115, 'learning_rate': 0.012081004159771277, 'max_depth': 8, 'min_child_weight': 1})
-Best Mean CV Score: 0.09019999999999999
---------------------
