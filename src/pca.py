@@ -5,6 +5,7 @@ import time
 import argparse
 import pandas as pd
 import numpy as np
+import copy
 
 import matplotlib.pyplot as plt
 from joblib import dump, load
@@ -323,6 +324,7 @@ def pca_analysis(df, plot_type, test=False):
     
     # ---------------- DEFINE VARIABLES ---------------- #
     
+    # remove null values
     df.dropna(inplace=True)
     
     # scaler
@@ -334,7 +336,10 @@ def pca_analysis(df, plot_type, test=False):
     
     # get values for both models
     X_train_start, X_val_start, y_train_start, y_val_start, X_train_end, X_val_end, y_train_end, y_val_end, boards_start, boards_end, train_boards_start, train_boards_end = split_data(df)
-    X_val_start.to_csv('../PCA/4_2/X_test_start_og.csv', index=False)
+    
+    # save input data before pca and scaling
+    X_val_start_og = copy.deepcopy(X_val_start)
+    X_val_end_og = copy.deepcopy(X_val_end)
     
     # ---------------- SCALING & PCA ---------------- #
     
@@ -399,6 +404,10 @@ def pca_analysis(df, plot_type, test=False):
     train_boards_end.to_csv(pca_path + 'train_boards_end.csv', index=False)
     boards_start.to_csv(pca_path + 'boards_start.csv', index=False)
     boards_end.to_csv(pca_path + 'boards_end.csv', index=False)
+    
+    # save input data before pca and scaling
+    X_val_start_og.to_csv(pca_path + 'X_test_start_og.csv', index=False)
+    X_val_end_og.to_csv(pca_path + 'X_test_end_og.csv', index=False)
         
             
     # create PCA with correct number of components

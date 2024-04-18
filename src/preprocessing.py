@@ -559,7 +559,7 @@ def test(game):
     for move in game.mainline_moves():
         print(encode_move_std(move), "\n")
 
-def create_model_input(game, k_safety_method, testing_move_number=-1, turn=1):
+def create_model_input(game, r_to, r_from, k_safety_method, testing_move_number=-1, turn=1):
     """
     Takes the game and creates an input for a machine learning model
     
@@ -572,8 +572,15 @@ def create_model_input(game, k_safety_method, testing_move_number=-1, turn=1):
     if game is None:
         return -1
     
-    # if not re.search(r"600[^\d]*", game.headers["TimeControl"]):
-    #     return -2
+    if not re.search(r"600[^\d]*", game.headers["TimeControl"]):
+        return None
+    
+    # check elo is in range
+    if r_to != 0:
+        w_elo = int(game.headers["WhiteElo"])
+        b_elo = int(game.headers["BlackElo"])
+        if w_elo < r_from or w_elo > r_to or b_elo < r_from or b_elo > r_to:
+            return None
     
     # get board position and next move
     temp = get_random_pos(game, testing_move_number, turn)
@@ -606,7 +613,7 @@ def create_model_input(game, k_safety_method, testing_move_number=-1, turn=1):
     
     return data
 
-def generate_df(filename, num_inputs, start_index=0, k_safety_method='std', encode_method='std'):
+def generate_df(filename, num_inputs, r_from, r_to, start_index=0, k_safety_method='std', encode_method='std'):
     """
     Main function that runs the preprocessing on the chess games database
     
@@ -652,11 +659,11 @@ def generate_df(filename, num_inputs, start_index=0, k_safety_method='std', enco
         print("\nPreprocessing data...")
         with alive_bar(num_inputs, bar="classic2", stats=False, spinner=None) as bar:
             while count < num_inputs:
-                singleInput = create_model_input(chess.pgn.read_game(pgn), k_safety_method)
+                singleInput = create_model_input(chess.pgn.read_game(pgn), r_to, r_from, k_safety_method)
                 if singleInput == -1:
                     print(f'\nNo more games in file, created {count} inputs. Exiting.')
                     break
-                if singleInput != None and singleInput != -2:
+                if singleInput != None:
                     inputs.append(singleInput)
                     count += 1
                     bar()
@@ -733,6 +740,8 @@ def main():
     parser.add_argument('type', choices=['single', 'multiple'], help="Type of function to run")
     parser.add_argument('--n_inputs', type=int, required=False, help="[Multiple Inputs] Number of inputs to use (-1 for all)")
     parser.add_argument('--start', type=int, required=False, default=0, help="[Multiple Inputs] Index of game to start at (default = 0)")
+    parser.add_argument('--r_from', type=int, required=False, default=0, help="[Multiple Inputs] Miniumu elo rating of either player")
+    parser.add_argument('--r_to', type=int, required=False, default=0, help="[Multiple Inputs] Maximum elo rating of either player")
     parser.add_argument('--move', type=int, required=False, help="[Single Input] Specify move number for single prediction")
     parser.add_argument('--turn', choices=['w', 'b'], required=False, help="[Single Input] Turn (White or Black)")
     parser.add_argument('--file', type=str, required=True, help="Name of file to process (including any extensions)")
@@ -755,8 +764,11 @@ def main():
         if args.n_inputs is None:
             print("Please specify the number of inputs to create (-n)")
             exit()
+        elif (args.r_to != 0 and args.r_from == 0) or (args.r_to == 0 and args.r_from != 0):
+            print("If either r_to or r_from is used, both must be specified.")
+            exit()
         else:
-            generate_df(args.file, args.n_inputs, args.start)
+            generate_df(args.file, args.n_inputs, args.r_from, args.r_to, args.start)
             
     
     

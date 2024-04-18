@@ -19,71 +19,199 @@ set_visualize_provider(InlineProvider())
 PATH_PREFIX = '../models/'
 PCA_PREFIX = '../PCA/'
 DATA_PREFIX = '../data/'
+PLOT_PREFIX = '../plots/'
 
-def interpret_model(model, X_test_pca, y_test, pca, scaler, X_test):
+def create_pca_columns(pca):
+    """
+    Create a column names list for each PCA component
     
-    # get feature column names (excluding squares)
-    column_names = pd.read_csv('../data/lichess-2023-11-10k.csv').drop(columns=['board_pos', 'start_square', 'end_square']).columns.tolist()
-    column_names = column_names[:7]
+    :param pca: PCA
     
-    # add column name for summed square shap values
-    column_names.append('square_summary')
+    :return: list of PCA component numbers
+    """
+    num_components = pca.components_.shape[0]
+    comps_arr = []
+    for i in range(num_components):
+        comps_arr.append(f"PC{i+1}")
+        
+    return comps_arr
 
-    # create explainer
-    explainer = shap.TreeExplainer(model)
-
-    # get shap values from explainer
-    shap_values_pca = explainer.shap_values(X_test_pca)
-
-    # reverse the PCA to get original features
-    shap_values_scaled = pca.inverse_transform(shap_values_pca)
+def combine_squares(shap_scaled, model):
+    """
+    Sums all of the square SHAP values (easier to visualise the impact of the board position as a whole)
     
-    # create empty list for formatted set of shap values
-
-    # ---------------- ADD SQUARE SHAP VALUES ---------------- #
+    :param shap_scaled: the scaled SHAP values
     
-    all_shap = [0] * len(shap_values_scaled)
+    :return: SHAP values with squares summed to one column
+    """
+    
+    if model == 'start':
+        num = 7
+    elif model == 'end':
+        num = 8
+    
+    # create array for summe shap values
+    all_shap = [0] * len(shap_scaled)
     
     # add all of the square values to one number to more easily visualise
-    for k in range(len(shap_values_scaled)):
-        values = scaler.inverse_transform(shap_values_scaled[k])
+    for k in range(len(shap_scaled)):
+        values = shap_scaled[k]
         all_values = [0] * len(values)
         for i in range(len(values)):
-            temp_arr = [0] * 8
+            temp_arr = [0] * (num + 1)
             temp = 0
             # loop through each set of values
-            for j in range(71):
+            for j in range(64 + num):
                 # put first 7 values in new array
-                if j < 7:
+                if j < num:
                     temp_arr[j] = values[i][j]
-                # sum last 64 squares to one values and put into new array
-                elif j == 70:
+                # sum last 64 squares to one values and put into new arr
+                elif j == 63 + num:
                     temp += values[i][j]
-                    temp_arr[7] = temp
+                    temp_arr[num] = temp
             # add new array to main array
             all_values[i] = temp_arr
-        all_shap[k] = all_values
+        all_shap[k] = all_values 
+    
+    return np.array(all_shap)
+
+def interpret_tree(model_start, model_end, X_test_pca_start, X_test_pca_end, pca_start, pca_end, X_test_start, X_test_end, plot, plot_type, model_name):
+    
+    # ---------------- ORIGINAL COLUMN NAMES ---------------- #
+    
+    # get feature column names (excluding squares)
+    column_names_start = pd.read_csv('../data/lichess-2023-11-10k.csv').drop(columns=['board_pos', 'start_square', 'end_square']).columns.tolist()
+    column_names_end = pd.read_csv('../data/lichess-2023-11-10k.csv').drop(columns=['board_pos', 'end_square']).columns.tolist()
+    column_names_start = column_names_start[:7]
+    column_names_end = column_names_end[:8]
+    
+    # add column name for summed square shap values
+    column_names_start.append('square_summary')
+    column_names_end.append('square_summary')
+    
+    # ---------------- PCA COLUMN NAMES ---------------- #
+    
+    start_comps = create_pca_columns(pca_start)
+    end_comps = create_pca_columns(pca_end)
+    
+    # ---------------- GET SHAP VALUES ---------------- #
+
+    # create explainer
+    explainer_start = shap.TreeExplainer(model_start)
+    explainer_end = shap.TreeExplainer(model_end)
+
+    # get shap values from explainer
+    shap_pca_start = explainer_start.shap_values(X_test_pca_start)
+    shap_pca_end = explainer_end.shap_values(X_test_pca_end)
+
+    # reverse the PCA to get original features
+    shap_scaled_start = pca_start.inverse_transform(shap_pca_start)
+    shap_scaled_end = pca_end.inverse_transform(shap_pca_end)
+
+    # ---------------- COMBINE SQUARE VALUES ---------------- #
+    
+    all_shap_start = combine_squares(shap_scaled_start, 'start')
+    all_shap_end = combine_squares(shap_scaled_end, 'start')
+    
+    # ---------------- PLOTS ---------------- #
+    
+    if plot == 'summary':
+        # save plots        
+        save_plot(shap_scaled_start, X_test_start, X_test_start.columns.tolist(), 'model_1', 'summary', model_name)
+        save_plot(shap_scaled_end, X_test_end, X_test_end.columns.tolist(), 'model_2', 'summary', model_name)
+
+    elif plot == 'waterfall':
+        # save plots
+        if plot_type == 'original':    
+            save_plot(all_shap_start, X_test_start, X_test_start.columns.tolist(), 'model_1', 'waterfall', model_name, explainer_start)
+            save_plot(all_shap_end, X_test_end, X_test_end.columns.tolist(), 'model_2', 'waterfall', model_name, explainer_end)
+        elif plot_type == 'pca':
+            save_plot(shap_pca_start, X_test_start, start_comps, 'model_1_pca', 'waterfall', model_name, explainer_start)
+            save_plot(shap_pca_end, X_test_end, end_comps, 'model_2_pca', 'waterfall', model_name, explainer_end)
             
-    all_shap = np.array(all_shap)
-    # convert to numpy array so summary_plot can run .shape
-    
-    # get the first set of shap values
-    shap_values = scaler.inverse_transform(shap_values_scaled[0])
-    
-    # plot the shap values
-    # shap.summary_plot(shap_values_scaled[0], X_test.values, feature_names=X_test.columns.tolist())
+    elif plot == 'force':
+        # save plots
+        save_plot(shap_scaled_start, X_test_start, X_test_start.columns.tolist(), 'model_1', 'force', explainer_start)
+        save_plot(shap_scaled_end, X_test_end, X_test_end.columns.tolist(), 'model_2', 'force', explainer_end)
+        
+    # display saved plots as subplot
+    display_plots(plot, plot_type, model_name)
 
-    # shap.waterfall_plot(shap.Explanation(values=all_shap[0][0], base_values=explainer.expected_value[0], data=X_test.iloc[0], feature_names=column_names))
-    # shap.waterfall_plot(shap.Explanation(values=shap_values[0], base_values=explainer.expected_value[0], data=X_test.iloc[0], feature_names=X_test.columns.tolist()))
-
-
-    # shap.force_plot(explainer.expected_value[0], shap_values_scaled[0][0], X_test.values[0], feature_names=X_test.columns.tolist(), matplotlib=True)
-    # shap.plots.waterfall(shap_values[0])
-
-def interpret_ebm(pca_start, scaler_start, comps_1, comps_2):
+def save_plot(shap_values, X_test, column_names, model_number, plot, model_name, explainer=None):
+    """
+    Creates and saves SHAP plots
     
-    # calculate loadings of original features on PCA components
+    :param shap_values: SHAP values to use in plot
+    :param X_test: X_test values to use in plot
+    :param column_names: feature names to use in plot
+    :param model_name: name of the model (1 or 2)
+    :param plot: type of plot {'summary', 'waterfall', 'force'}
+    :param explainer: if an explainer is needed for shap plot
     
+    :return: saves plots to png files
+    """
+
+    # create the specified plot
+    if plot == 'summary':
+        shap.summary_plot(shap_values[0], X_test.values, feature_names=column_names, show=False)
+    elif plot == 'waterfall':
+        shap.waterfall_plot(shap.Explanation(values=shap_values[0][0], base_values=explainer.expected_value[0], data=X_test.iloc[0], feature_names=column_names), show=False)
+    elif plot == 'force':
+        shap.force_plot(explainer.expected_value[0], shap_values[0][0], X_test.values[0], feature_names=column_names, matplotlib=True, show=False)
+
+
+    # set title and save to file
+    plt.title(model_number)
+    plt.tight_layout()
+    plt.savefig(PLOT_PREFIX + f'{model_name}_{plot}_{model_number}.png')
+    plt.close()
+        
+def display_plots(plot, plot_type, model_name):
+    """
+    Displays saved plots
+    
+    :param plot: type of plot {'summary', 'waterfall', 'force'}
+    :param plot_type: type of plot data {'original', 'pca'}
+    
+    :return: displays the saved plots as a subplot
+    """
+    # create subplot
+    fig, axes = plt.subplots(1, 2, figsize=(12, 6))
+    
+    # get plots file paths
+    if plot_type == 'original':
+        plot_1 = plt.imread(PLOT_PREFIX + f'{model_name}_{plot}_model_1.png')
+        plot_2 = plt.imread(PLOT_PREFIX + f'{model_name}_{plot}_model_2.png')
+    elif plot_type == 'pca':
+        plot_1 = plt.imread(PLOT_PREFIX + f'{model_name}_{plot}_model_1_pca.png')
+        plot_2 = plt.imread(PLOT_PREFIX + f'{model_name}_{plot}_model_2_pca.png')
+    
+    # get plots from files and set titles
+    axes[0].imshow(plot_1)
+    axes[0].axis('off')
+    axes[0].set_title('Model 1')
+    
+    axes[1].imshow(plot_2)
+    axes[1].axis('off')
+    axes[1].set_title('Model 2')
+    
+    # show subplot
+    plt.tight_layout()
+    plt.show()
+
+def pca_loadings(pca_start, pca_end, comps_1, comps_2):
+    """
+    Get the loadings of the original features for each PCA component
+    
+    :param pca_start: PCA for model 1
+    :param pca_end: PCA for model 2
+    :param comps_1: number of components for model 1
+    :param comps_1: number of components for model 2
+    
+    :return: display specified plot of loadings
+    """
+    
+    # original features to map to
     original_features = [
     'w_safety', 'b_safety', 'w_central', 'b_central', 'w_rating', 'b_rating',
     'turn', 'square_0', 'square_1', 'square_2', 'square_3', 'square_4',
@@ -99,20 +227,29 @@ def interpret_ebm(pca_start, scaler_start, comps_1, comps_2):
     'square_59', 'square_60', 'square_61', 'square_62', 'square_63'
     ]
     
+    # features with square positions as sum and mean
     collapsed_features = ['w_safety', 'b_safety', 'w_central', 'b_central', 'w_rating', 'b_rating',
     'turn', 'sum_squares', 'mean_squares']
     
+    # create arrays for pca loadings
     start_loadings = np.array([[0.0] * len(original_features) for _ in range(comps_1)])
+    end_loadings = np.array([[0.0] * len(original_features) for _ in range(comps_1)])
     
-    # get loading for each feature of each PCA component
+    # get start loading for each feature of each PCA component
     for i in range(comps_1):
         for j in range(len(original_features)):
             start_loadings[i][j] = pca_start.components_[i][j]
+            
+    # get end loading for each feature of each PCA component
+    for i in range(comps_2):
+        for j in range(len(original_features)):
+            end_loadings[i][j] = pca_end.components_[i][j]
     
-    # new loadings arr
+    # new loadings array
     new_start_loadings = np.array([[0.0] * 9 for _ in range(comps_1)])
+    new_end_loadings = np.array([[0.0] * 9 for _ in range(comps_2)])
     
-    # sum/mean the square positions
+    # sum/mean the square positions for model 1
     for i in range(comps_1):
         temp_sum = 0.0
         for j in range(len(original_features)):
@@ -124,23 +261,41 @@ def interpret_ebm(pca_start, scaler_start, comps_1, comps_2):
                 new_start_loadings[i][8] = temp_sum / 64
             else:
                 temp_sum += start_loadings[i][j]
-                
 
+    # sum/mean the square positions for model 2
+    for i in range(comps_2):
+        temp_sum = 0.0
+        for j in range(len(original_features)):
+            if j < 7:
+                new_end_loadings[i][j] = end_loadings[i][j]
+            elif j == 63:
+                temp_sum += start_loadings[i][j]
+                new_end_loadings[i][7] = temp_sum
+                new_end_loadings[i][8] = temp_sum / 64
+            else:
+                temp_sum += end_loadings[i][j]
+                
 
     # ---------------- PLOT VALUES ---------------- #
 
-    # heatmap
+    # TODO: Add other diagrams
+    # TODO: Add option to save to file
+
+    # heatmap model 1
     plt.figure(figsize=(10, 6))
     sns.heatmap(new_start_loadings, cmap='coolwarm', annot=True, fmt=".2f", xticklabels=collapsed_features, yticklabels=["PC " + str(i) for i in range(1, new_start_loadings.shape[0] + 1)])
-    plt.title('PCA Loadings Heatmap')
+    plt.title('PCA Loadings Heatmap For Model 1')
     plt.xlabel('Original Features')
     plt.ylabel('Principal Components')
     plt.show()
-                
-                
-            
     
-
+    # heatmap model 2
+    plt.figure(figsize=(10, 6))
+    sns.heatmap(new_end_loadings, cmap='coolwarm', annot=True, fmt=".2f", xticklabels=collapsed_features, yticklabels=["PC " + str(i) for i in range(1, new_end_loadings.shape[0] + 1)])
+    plt.title('PCA Loadings Heatmap For Model 2')
+    plt.xlabel('Original Features')
+    plt.ylabel('Principal Components')
+    plt.show()
     
 def main():
     # ---------------- ARGUMENT HANDLING ---------------- #
@@ -149,32 +304,37 @@ def main():
     parser.add_argument('--model', choices=['dt', 'gb', 'ebm'], required=True, help='Model to train')
     parser.add_argument('--comps_1', required=True, help='Number of components to train model 1 with (folder must exist under "PCA/")')
     parser.add_argument('--comps_2', required=True, help='Number of components to train model 2 with (folder must exist under "PCA/")')
+    parser.add_argument('--plot', choices=['summary', 'waterfall', 'force'], required=True, help="SHAP plot type")
+    parser.add_argument('--plot_type', choices=['original', 'pca'], required=True, help="Features to plot on the graph")
     args = parser.parse_args()
     
+    # create model path
     model_path = f"{PATH_PREFIX}{args.model}/{args.model}_{args.comps_1}_{args.comps_2}/"
-    model = load(model_path + 'model_start.joblib')
-    pca_path = f"{PCA_PREFIX}{args.comps_1}_{args.comps_2}/"
-    pca_start = load(pca_path + 'pca_start.joblib')
-    scaler_start = load(pca_path + 'scaler_start.joblib')
     
-    if args.model == 'ebm':
-        interpret_ebm(pca_start,scaler_start, int(args.comps_1), int(args.comps_2))
-        exit()
-        
-
-
     # check if model exists
     if not os.path.isfile(f'{model_path}model_start.joblib') or not os.path.isfile(f'{model_path}model_end.joblib'):
         print("ERROR: No trained model exists. Train using python training.py")
         exit()
-
     
-    # load trained model from file
-    model = load(model_path + 'model_start.joblib')
-    X_val = pd.read_csv(pca_path + 'X_val_start.csv')
-    X_test = pd.read_csv(pca_path + 'X_test_start_og.csv')
-    y_test = pd.read_csv(pca_path + 'y_val_start.csv')
-    interpret_model(model, X_val, y_test, pca_start, scaler_start, X_test)
+    # load models, scalers and pca
+    pca_path = f"{PCA_PREFIX}{args.comps_1}_{args.comps_2}/"
+    model_start = load(model_path + 'model_start.joblib')
+    model_end = load(model_path + 'model_end.joblib')
+    pca_start = load(pca_path + 'pca_start.joblib')
+    pca_end = load(pca_path + 'pca_end.joblib')
+    scaler_end = load(pca_path + 'scaler_end.joblib')
+    
+    if args.model == 'ebm':
+        pca_loadings(pca_start, pca_end, int(args.comps_1), int(args.comps_2))
+    elif args.model == 'gb' or args.model == 'dt':
+        # load trained model from file
+        X_val_start = pd.read_csv(pca_path + 'X_val_start.csv')
+        X_val_end = pd.read_csv(pca_path + 'X_val_end.csv')
+        X_val_end = scaler_end.transform(X_val_end)
+        X_val_end = pca_end.transform(X_val_end)
+        X_test_start = pd.read_csv(pca_path + 'X_test_start_og.csv')
+        X_test_end = pd.read_csv(pca_path + 'X_test_end_og.csv')
+        interpret_tree(model_start, model_end, X_val_start, X_val_end, pca_start, pca_end, X_test_start, X_test_end, args.plot, args.plot_type, args.model)
 
 
 if __name__ == "__main__":

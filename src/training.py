@@ -8,6 +8,7 @@ import time
 import chess.pgn
 import os
 import pickle
+import copy
 
 from alive_progress import alive_bar
 from joblib import dump, load
@@ -102,7 +103,7 @@ def train_models(model_name, comps_start, comps_end, batch=None, hyper=False, en
 
     # keep original versions for combining models later
     # X_val_start_og = X_val_start
-    X_val_end_og = X_val_end
+    X_val_end_og = copy.deepcopy(X_val_end)
     
     # perform scaling
     # X_val_start = scaler_start.transform(X_val_start)
@@ -162,15 +163,32 @@ def train_models(model_name, comps_start, comps_end, batch=None, hyper=False, en
         # create and train correct model
         match model_name:
             case 'dt':
-                model_start = DecisionTreeClassifier(random_state=42)
-                model_end = DecisionTreeClassifier(random_state=42)
+                start_params = {
+                    'criterion': 'gini',
+                    'max_depth': 11,
+                    'max_features': 47,
+                    'min_samples_leaf': 20,
+                    'min_samples_split': 2,
+                    'random_state': 42,
+                }
+                end_params = {
+                    'criterion': 'gini',
+                    'max_depth': 9,
+                    'max_features': 15,
+                    'min_samples_leaf': 2,
+                    'min_samples_split': 2,
+                    'random_state': 42,
+                }
+                
+                model_start = DecisionTreeClassifier(**start_params)
+                model_end = DecisionTreeClassifier(**end_params)
                 model_start, model_end = train_model(X_train_start, X_train_end, y_train_start, y_train_end, model_start, model_end)
             case 'gb':
                 start_params = {
-                    'learning_rate': 0.07024314447358557,
-                    'max_depth': 13,
-                    'min_child_weight': 1,
-                    'gamma': 2.352208403256953,
+                    'learning_rate': 0.010388437424247943,
+                    'max_depth': 17,
+                    'min_child_weight': 3,
+                    'gamma': 3.350987217555605,
                     'random_state': 42,
                     'enable_categorical': True,
                 }
@@ -186,39 +204,36 @@ def train_models(model_name, comps_start, comps_end, batch=None, hyper=False, en
                 model_end = xgb.XGBClassifier(**end_params)
                 model_start, model_end = train_model(X_train_start, X_train_end, y_train_start, y_train_end, model_start, model_end)
             case 'ebm':
-                if batch: 
-                    pass
-                    # num_batches = batch 
-
-                    # # calculate the batch size
-                    # batch_size = len(X_train) // num_batches
-                    # remainder = len(X_train) % num_batches
-                    # if remainder != 0:
-                    #     batch_size += 1
-
-                    # # create model
-                    # model = ExplainableBoostingClassifier(random_state=42, n_jobs=-2, interactions=0)
-
-                    # for i in range(num_batches):
-                    #     batch_start = time.time()
-                        
-                    #     start_idx = i * batch_size
-                    #     end_idx = min((i + 1) * batch_size, len(X_train))
-                        
-                    #     X_batch = X_train[start_idx:end_idx]
-                    #     y_batch = y_train[start_idx:end_idx]
-
-                    #     # train model
-                    #     with Halo(text=f'Training', color='grey', spinner="dots3"):
-                    #         model.fit(X_batch, y_batch)
-                        
-                    #     batch_end = time.time()
-                    #     print(f'\n--- BATCH {i} COMPLETED ---')
-                    #     print(f'\n--- TIME ELAPSED: {batch_end - batch_start} ---')
-                else:
-                    model_start = ExplainableBoostingClassifier(random_state=42, n_jobs=-2, interactions=0) 
-                    model_end = ExplainableBoostingClassifier(random_state=42, n_jobs=-2, interactions=0) 
-                    model_start, model_end = train_model(X_train_start, X_train_end, y_train_start, y_train_end, model_start, model_end)
+                start_params = {
+                    'cyclic_progress': 0.5,
+                    'greedy_ratio': 0.0,
+                    'interactions': 0,
+                    'learning_rate': 0.0025,
+                    'max_bins': 16384,
+                    'max_leaves': 3,
+                    'min_samples_leaf': 3,
+                    'n_jobs': -2,
+                    'random_state': 42,
+                    'smoothing_rounds': 50,
+                    'validation_size': 0.15,
+                }
+                
+                end_params = {
+                    'cyclic_progress': 0.5,
+                    'greedy_ratio': 1.75,
+                    'interactions': 0,
+                    'learning_rate': 0.02,
+                    'max_leaves': 4,
+                    'min_samples_leaf': 2,
+                    'n_jobs': -2,
+                    'random_state': 42,
+                    'smoothing_rounds': 0,
+                    'validation_size': 0.2,
+                    'max_bins': 16384
+                }
+                model_start = ExplainableBoostingClassifier(**start_params) 
+                model_end = ExplainableBoostingClassifier(**end_params) 
+                model_start, model_end = train_model(X_train_start, X_train_end, y_train_start, y_train_end, model_start, model_end)
 
     
     # save model to file
@@ -288,7 +303,6 @@ def train_models(model_name, comps_start, comps_end, batch=None, hyper=False, en
     # loop through predictions, keeping any legal moves (not just correct ones, legally allowed moves in the current board position)
     for i in range(len(pred_end)):
         pred_move = str(pred_start[i]) + str(preds[i])
-        # print(f"\nPred: {pred_move}  Move: {str(y_start[i]) + str(y_end[i])} \nBoard\n{chess.Board(boards[i])}")
         if is_legal(boards_end[i], pred_move):
             filtered_preds.append(int(pred_move))
             filtered_acc.append(int(str(y_val_start[i]) + str(y_val_end[i])))
@@ -402,7 +416,6 @@ def tune_hyper(X_start, X_end, y_start, y_end, combined_boards_start, combined_b
     
     ebm_params = {
         # 'max_bins': [1024, 4096, 16384, 65536],
-        'interactions': [0, 0.25, 0.5, 0.75, 0.95, 5, 10, 25, 50, 100, 250],
         'validation_size': [0.1, 0.15, 0.2],
         'learning_rate': [0.02, 0.01, 0.005, 0.0025],
         'greedy_ratio': [0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 4.0],
