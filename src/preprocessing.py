@@ -32,17 +32,6 @@ PIECE_VALUES = {
     'K': 12,
 }
 
-def addition_factorial(num):
-    """
-    Returns the addition factorial of a given number (e.g. 1+2+3 rather than 1*2*3)
-    
-    :param num: number to calculate with
-    
-    :return: addition factorial number
-    """
-    
-    return int(((num*num) + num) / 2)
-
 def find_number_moves(moves):
     """
     Finds the number of moves in a given game
@@ -243,7 +232,7 @@ def check_king_edges(king_pos, color):
         else:
             return 'N'
     
-def check_pawns_in_file(color, checking_pos, bitboard, method):
+def check_pawns_in_file(color, checking_pos, bitboard):
     """
     Check given file for a friendly pawn
 
@@ -267,10 +256,7 @@ def check_pawns_in_file(color, checking_pos, bitboard, method):
         # break if top rank (avoid index error)
         if check_top_rank(color, checking_pos):
             # set points to max and break
-            if method == "standard":
-                points = 3
-            else:
-                points = addition_factorial(3)
+            points = 3
             break
         
         # check if next square has friendly pawn
@@ -282,16 +268,12 @@ def check_pawns_in_file(color, checking_pos, bitboard, method):
                 checking_pos -= 8
             else:
                 checking_pos += 8
-                
-            # check method
-            if method == "standard":
-                points = i
-            else:
-                points = addition_factorial(i)
+            points = i
+
 
     return points
    
-def check_files(color, king_edge, king_pos, bitboard, method):
+def check_files(color, king_edge, king_pos, bitboard):
     """
     Checks appropriate files for pawns
     
@@ -308,33 +290,33 @@ def check_files(color, king_edge, king_pos, bitboard, method):
         checking_pos = king_pos[0] - 8
         
         # check method
-        safety += check_pawns_in_file('w', checking_pos, bitboard, method)
+        safety += check_pawns_in_file('w', checking_pos, bitboard)
         
         # check left and/or right file
         if king_edge[0] != 'R':
             checking_pos = king_pos[0] - 7
-            safety += check_pawns_in_file('w', checking_pos, bitboard, method)
+            safety += check_pawns_in_file('w', checking_pos, bitboard)
             
         if king_edge[0] != 'L':
             checking_pos = king_pos[0] - 9
-            safety += check_pawns_in_file('w', checking_pos, bitboard, method)
+            safety += check_pawns_in_file('w', checking_pos, bitboard)
     else:
         
         # check king's file
         checking_pos = king_pos[1] + 8
-        safety += check_pawns_in_file('b', checking_pos, bitboard, method)
+        safety += check_pawns_in_file('b', checking_pos, bitboard)
         
         # check left and/or right file
         if king_edge[1] != 'R':
             checking_pos = king_pos[1] + 9
-            safety += check_pawns_in_file('b', checking_pos, bitboard, method)
+            safety += check_pawns_in_file('b', checking_pos, bitboard)
         if king_edge[1] != 'L':
             checking_pos = king_pos[1] + 7
-            safety += check_pawns_in_file('b', checking_pos, bitboard, method)
+            safety += check_pawns_in_file('b', checking_pos, bitboard)
             
     return safety
 
-def king_safety_eval(king_pos, method, bitboard):
+def king_safety_eval(king_pos, bitboard):
     """
     Evaluates the safety of given king (cap of 3 pushes for each pawn)
 
@@ -346,7 +328,7 @@ def king_safety_eval(king_pos, method, bitboard):
     """
                 
     king_edge = [check_king_edges(king_pos[0], 'w'), check_king_edges(king_pos[1], 'b')]
-    safety = [check_files('w', king_edge, king_pos, bitboard, method), check_files('b', king_edge, king_pos, bitboard, method)]
+    safety = [check_files('w', king_edge, king_pos, bitboard), check_files('b', king_edge, king_pos, bitboard)]
 
     return np.array(safety)
 
@@ -390,135 +372,6 @@ def central_control_eval(board_pos):
         
     return np.array(central_control)
 
-def encode_moves_binary(moves):
-    """
-    Encodes a position to binary columns (to be used with binary and vector encodings)
-    
-    :param moves: list of moves in format E.g. "e5d5" or for promotion to queen "e4e8q"
-    """
-    
-    # data to create dataframe from
-    data = []
-    
-    # loop through every row of dataframe
-    for row in moves:
-        
-        # get the start and end square
-        start_square, end_square = row[:2], row[2:]
-        
-        # get start and end columns and ranks
-        start_column, start_rank = start_square[0], start_square[1]
-        end_column, end_rank = end_square[0], end_square[1]
-        
-        # blank row entry
-        blank_list = [0] * 36
-        
-        # set needed start and end positions indexes to 1
-        blank_list[ord(start_column) - 88] = 1
-        blank_list[int(start_rank)] = 1
-        blank_list[ord(end_column) - 72] = 1
-        blank_list[int(end_rank) + 16] = 1
-        
-        # if there is a promotion
-        if len(row) > 4:
-            promotion_index = 35
-            # determine the correct column based on piece
-            match (row[4]):
-                case 'q':
-                    promotion_index = 32
-                    break
-                case 'r':
-                    promotion_index = 33
-                    break
-                case 'b':
-                    promotion_index = 34
-                    break
-                case 'n':
-                    promotion_index = 35
-                    break
-                
-            # set correct promotion index to 1
-            blank_list[promotion_index] = 1    
-        
-        # append list to data
-        data.append(blank_list)
-        
-        
-    # create dataframe from data
-    encoded_df = pd.DataFrame(data, columns=['s1', 's2', 's3', 's4', 's5', 's6', 's7', 's8', 'sa', 'sb', 'sc', 'sd', 'se',
-                                             'sf', 'sg', 'sh', 'e1', 'e2', 'e3', 'e4', 'e5', 'e6', 'e7', 'e8', 'ea', 'eb',
-                                             'ec', 'ed', 'ee', 'ef', 'eg', 'eh', 'promote_q', 'promote_r', 'promote_b',
-                                             'promote_n'])
-    
-    return encoded_df
-    
-def encode_moves_binary_vector(moves):
-    """
-    Encodes the "next_move" with binary start position and vector move
-    
-    :param moves: list of moves in format E.g. "e4d5" or for promotion to queen "e4e8q"
-    """
-        
-    # data to create dataframe from
-    data = []
-    
-    # loop through every row of dataframe
-    for row in moves:
-        
-        # get the start and end square
-        start_square, end_square = row[:2], row[2:]
-        
-        # get start and end columns and ranks
-        start_column, start_rank = start_square[0], start_square[1]
-        end_column, end_rank = end_square[0], end_square[1]
-                
-        # calculate columns and ranks moved
-        columns_moved = ord(end_column) - ord(start_column)
-        ranks_moved = ord(end_rank) - ord(start_rank)
-        
-        # blank row entry
-        blank_list = [0] * 22
-        
-        # set needed start position indexes to 1
-        blank_list[ord(start_column) - 89] = 1
-        blank_list[int(start_rank) - 1] = 1
-        
-        # columns and ranks moved
-        blank_list[16] = columns_moved
-        blank_list[17] = ranks_moved
-        
-        
-        # if there is a promotion
-        if len(row) > 4:
-            promotion_index = 21
-        # determine the correct column based on piece
-            match (row[4]):
-                case 'q':
-                    promotion_index = 18
-                    break
-                case 'r':
-                    promotion_index = 19
-                    break
-                case 'b':
-                    promotion_index = 20
-                    break
-                case 'n':
-                    promotion_index = 21
-                    break
-                
-            # set correct promotion index to 1
-            blank_list[promotion_index] = 1    
-        
-        # append list to data
-        data.append(blank_list)
-        
-        
-    # create dataframe from data
-    encoded_df = pd.DataFrame(data, columns=['1', '2', '3', '4', '5', '6', '7', '8', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h',
-                                             'columns_moved', 'ranks_moved', 'promote_q', 'promote_r', 'promote_b', 'promote_n'])
-    
-    return encoded_df
-
 def encode_move_std(move):    
     # Convert to list
     move = [*str(move)]
@@ -555,11 +408,7 @@ def encode_move_std(move):
 def get_legal_moves(position):
     return [position.san(move) for move in position.legal_moves]
 
-def test(game):
-    for move in game.mainline_moves():
-        print(encode_move_std(move), "\n")
-
-def create_model_input(game, r_to, r_from, k_safety_method, testing_move_number=-1, turn=1):
+def create_model_input(game, r_to=0, r_from=0, testing_move_number=-1, turn=1, time_control_check=True):
     """
     Takes the game and creates an input for a machine learning model
     
@@ -572,10 +421,12 @@ def create_model_input(game, r_to, r_from, k_safety_method, testing_move_number=
     if game is None:
         return -1
     
-    if not re.search(r"600[^\d]*", game.headers["TimeControl"]):
+    if time_control_check and not re.search(r"600[^\d]*", game.headers["TimeControl"]):
         return None
     
     # check elo is in range
+    r_to = int(r_to)
+    r_from = int(r_from)
     if r_to != 0:
         w_elo = int(game.headers["WhiteElo"])
         b_elo = int(game.headers["BlackElo"])
@@ -597,7 +448,7 @@ def create_model_input(game, r_to, r_from, k_safety_method, testing_move_number=
 
     # get king safety and central control values
     king_pos = find_kings(bitboard)
-    king_safety = king_safety_eval(king_pos, k_safety_method, bitboard)
+    king_safety = king_safety_eval(king_pos, bitboard)
     central_control = central_control_eval(chess.Board(board_pos))
 
     # get player ratings
@@ -613,7 +464,7 @@ def create_model_input(game, r_to, r_from, k_safety_method, testing_move_number=
     
     return data
 
-def generate_df(filename, num_inputs, r_from, r_to, start_index=0, k_safety_method='std', encode_method='std'):
+def generate_df(filename, num_inputs, r_from, r_to, start_index=0):
     """
     Main function that runs the preprocessing on the chess games database
     
@@ -646,7 +497,7 @@ def generate_df(filename, num_inputs, r_from, r_to, start_index=0, k_safety_meth
         
         game = chess.pgn.read_game(pgn)
         while (game != None):
-            singleInput = create_model_input(game, k_safety_method)
+            singleInput = create_model_input(game)
             if singleInput != None and singleInput != -2:
                 inputs.append(singleInput)
             game = chess.pgn.read_game(pgn)
@@ -659,7 +510,7 @@ def generate_df(filename, num_inputs, r_from, r_to, start_index=0, k_safety_meth
         print("\nPreprocessing data...")
         with alive_bar(num_inputs, bar="classic2", stats=False, spinner=None) as bar:
             while count < num_inputs:
-                singleInput = create_model_input(chess.pgn.read_game(pgn), r_to, r_from, k_safety_method)
+                singleInput = create_model_input(chess.pgn.read_game(pgn), r_to, r_from)
                 if singleInput == -1:
                     print(f'\nNo more games in file, created {count} inputs. Exiting.')
                     break
@@ -678,19 +529,12 @@ def generate_df(filename, num_inputs, r_from, r_to, start_index=0, k_safety_meth
         df[f'square_{i}'] = df['bitboard'].apply(lambda x: x[i])
         
     
-    # encode next_move column
-    if encode_method == "vector":
-        encoded_df = encode_moves_binary_vector(df['next_move'].to_numpy())
-        df = pd.concat([df, encoded_df], axis=1)
-    elif encode_method == "binary":
-        encoded_df = encode_moves_binary(df['next_move'].to_numpy())
-        df = pd.concat([df, encoded_df], axis=1)
-    else:
-        # encode and convert to start and end squares
-        df['next_move_encoded'] = df['next_move'].apply(encode_move_std)
-        df['start_square'] = df['next_move_encoded'].str[:2]
-        df['end_square'] = df['next_move_encoded'].str[2:]
-        df = df.drop(columns=['next_move_encoded'])
+
+    # encode and convert to start and end squares
+    df['next_move_encoded'] = df['next_move'].apply(encode_move_std)
+    df['start_square'] = df['next_move_encoded'].str[:2]
+    df['end_square'] = df['next_move_encoded'].str[2:]
+    df = df.drop(columns=['next_move_encoded'])
         
     # drop bitboard column
     df.drop(columns=['bitboard'], inplace=True)
@@ -705,20 +549,17 @@ def generate_df(filename, num_inputs, r_from, r_to, start_index=0, k_safety_meth
     # save to csv file
     df.to_csv(DATA_PREFIX + f'{filename}.csv', index=False)
 
-def create_single_input(filename, move_number, turn=1, k_safety_method='std'):
+def create_single_input(filename, move_number, turn=1):
     # set the file path
     dbpath = f'../data/{filename}'
     
     # access games database
     pgn = open(dbpath)
-    
-    singleInput = create_model_input(chess.pgn.read_game(pgn), k_safety_method, move_number, turn)
-    
+    singleInput = create_model_input(game=chess.pgn.read_game(pgn), testing_move_number=move_number, turn=turn, time_control_check=False)
     columns = ["board_pos", "bitboard", "w_safety", "b_safety", "w_central", "b_central", "w_rating", "b_rating", "turn", "next_move"]
     
     # convert to dataframe    
-    df = pd.DataFrame([singleInput])
-    df.columns = columns
+    df = pd.DataFrame(data=[singleInput], columns=columns)
     
     # Convert bitboard to its own columns for input into model
     for i in range(64):
@@ -758,7 +599,7 @@ def main():
         elif args.turn is None:
             create_single_input(args.file, args.move)
         else:
-            create_single_input(args.file, args.move, args.turn)
+            create_single_input(filename=args.file, move_number=args.move, turn=args.turn)
             
     elif args.type == 'multiple':
         if args.n_inputs is None:

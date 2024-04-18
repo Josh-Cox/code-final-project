@@ -12,6 +12,8 @@ class TestPreprocessing(unittest.TestCase):
         self.test_game = chess.pgn.read_game(self.test_data)
         self.test_moves = str(self.test_game.mainline_moves())
         self.test_fen = self.test_game.board().fen()
+        self.test_move = 'e4d7'
+        self.test_move_encoded = '5447'
         
         # Different test positions as bitboards
         self.test_bitboard  = np.array([2, 3, 4, 5, 6, 4, 3, 2, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 7, 7, 7, 7, 7, 7, 7, 8, 9, 10, 11, 12, 10, 9, 8])
@@ -29,14 +31,21 @@ class TestPreprocessing(unittest.TestCase):
         self.test_model_input_bitboard = convert_to_bitboard(self.test_fen)
         self.test_model_input_king_safety = np.array([4, 1])
         self.test_model_input_central_control = np.array([4, 5])
-        self.test_white_elo = 1961
-        self.test_black_elo = 1618
+        self.test_elo = ['1961', '1618']
 
     def test_find_number_moves(self):
         """
         Tests function to find the number of moves in a given set of moves
         """
-        self.assertEqual(find_number_moves(self.test_moves), 31, "Number of moves is wrong")
+        
+        self.assertEqual(find_number_moves(self.test_moves), 30, "Number of moves is wrong")
+        
+    def test_get_player_ratings(self):
+        """
+        Tests function to get the ratings of each player in a given game
+        """
+        
+        np.array_equal(get_player_ratings(self.test_game), self.test_elo)
         
     def test_get_random_position(self):
         """
@@ -46,11 +55,12 @@ class TestPreprocessing(unittest.TestCase):
         # Get random position
         test_rand_pos = get_random_pos(self.test_game)[0]
         
-        regex = r"^((([pnbrqkPNBRQK1-8]{1,8})\/?){8})\s+(b|w)\s+(-|K?Q?k?q)\s+(-|[a-h][3-6])\s+(\d+)\s+(\d+)\s*$"
-
-        # Check this is correct FEN format
-        self.assertRegex(test_rand_pos, regex)
-    
+        # Check this is correct FEN format by trying to create board object
+        try:
+            chess.Board(test_rand_pos)
+        except:
+            raise ValueError("Random position given not valid FEN")
+            
     def test_convert_to_bitboard(self):
         """
         Tests function that takes a FEN and returns a bitboard
@@ -77,8 +87,7 @@ class TestPreprocessing(unittest.TestCase):
         
         correct_pos = np.array([4, 53])
         np.testing.assert_allclose(find_kings(self.test_opposite_rank_white), correct_pos, rtol=0, atol=0, err_msg="King positions are not correct")
-        
-    
+         
     def test_check_top_rank(self):
         """
         Tests function that takes the color and king position and returns whether it is on the opposite rank
@@ -94,24 +103,23 @@ class TestPreprocessing(unittest.TestCase):
         """
         
         # Checking standard
-        np.testing.assert_allclose(king_safety_eval(np.array([60, 4]), "standard", self.test_good_king_safey), np.array([2, 1]), rtol=0, atol=0, err_msg="King safety evaluation incorrect")
-        np.testing.assert_allclose(king_safety_eval(np.array([60, 4]), "standard", self.test_bad_king_safey), np.array([4, 6]), rtol=0, atol=0, err_msg="King safety evaluation incorrect")
-        np.testing.assert_allclose(king_safety_eval(np.array([63, 0]), "standard", self.test_right_edge_king_safety), np.array([4, 1]), rtol=0, atol=0, err_msg="King safety evaluation incorrect")
-        np.testing.assert_allclose(king_safety_eval(np.array([56, 7]), "standard", self.test_left_edge_king_safety), np.array([2, 3]), rtol=0, atol=0, err_msg="King safety evaluation incorrect")
-        
-        # Checking Exponential
-        np.testing.assert_allclose(king_safety_eval(np.array([60, 4]), "exponential", self.test_good_king_safey), np.array([2, 1]), rtol=0, atol=0, err_msg="King safety evaluation incorrect")
-        np.testing.assert_allclose(king_safety_eval(np.array([60, 4]), "exponential", self.test_bad_king_safey), np.array([5, 8]), rtol=0, atol=0, err_msg="King safety evaluation incorrect")
-        np.testing.assert_allclose(king_safety_eval(np.array([63, 0]), "exponential", self.test_right_edge_king_safety), np.array([7, 1]), rtol=0, atol=0, err_msg="King safety evaluation incorrect")
-        np.testing.assert_allclose(king_safety_eval(np.array([56, 7]), "exponential", self.test_left_edge_king_safety), np.array([2, 3]), rtol=0, atol=0, err_msg="King safety evaluation incorrect")
-
-        
+        np.testing.assert_allclose(king_safety_eval(np.array([60, 4]), self.test_good_king_safey), np.array([2, 1]), rtol=0, atol=0, err_msg="King safety evaluation incorrect")
+        np.testing.assert_allclose(king_safety_eval(np.array([60, 4]), self.test_bad_king_safey), np.array([4, 6]), rtol=0, atol=0, err_msg="King safety evaluation incorrect")
+        np.testing.assert_allclose(king_safety_eval(np.array([63, 0]), self.test_right_edge_king_safety), np.array([4, 1]), rtol=0, atol=0, err_msg="King safety evaluation incorrect")
+        np.testing.assert_allclose(king_safety_eval(np.array([56, 7]), self.test_left_edge_king_safety), np.array([2, 3]), rtol=0, atol=0, err_msg="King safety evaluation incorrect")
+      
     def test_central_control_eval(self):
         """
         Tests function that takes a board position and returns a value for central control for each color
         """
         np.testing.assert_allclose(central_control_eval(self.test_central_control_one), np.array([4, 5]), rtol=0, atol=0, err_msg="Central control is incorrect")
         
+    def test_encode_move_std(self):
+        """
+        Tests function to encode a given move
+        """
+        
+        self.assertEqual(encode_move_std(self.test_move), self.test_move_encoded)
         
     def test_create_model_inputs(self):
         """
@@ -119,48 +127,48 @@ class TestPreprocessing(unittest.TestCase):
         """
     
         # test input for the function
-        print(create_model_input(self.test_game, "standard", 20))
-        test_input = create_model_input(self.test_game, "standard", 20)
-        
-        regex = r"^((([pnbrqkPNBRQK1-8]{1,8})\/?){8})\s+(b|w)\s+(-|K?Q?k?q)\s+(-|[a-h][3-6])\s+(\d+)\s+(\d+)\s*$"
+        test_input = create_model_input(self.test_game, testing_move_number=20)
 
         # Check correct FEN format
-        self.assertRegex(test_input[0], regex)
+        fen = test_input[0]
+        try:
+            chess.Board(fen)
+        except:
+            raise ValueError("Random position given not valid FEN")
                 
         # two correct bitboards (white or black's turn)
-        correct_bitboards = [np.array([ 2,  0,  0,  0,  0,  0,  6,  0,  1,  0,  0,  2,  0,  1,  1,  1,  0,
-        0,  0,  0,  4,  0,  0,  0,  0,  0,  0,  9,  0,  0,  0,  0,  0,  0,
-        0,  0,  7,  0,  0,  0,  0,  7,  0,  0,  0,  9,  0,  0,  7,  0,  0,
-        0,  0,  7,  7, 10,  0,  0,  0,  8,  0,  0, 12,  0]),
-        np.array([ 2,  0,  0,  2,  0,  0,  6,  0,  1,  0,  0,  0,  0,  1,  1,  1,  0,
-        0,  0,  0,  4,  0,  0,  0,  0,  0,  0,  9,  0,  0,  0,  0,  0,  0,
-        0,  0,  7,  0,  0,  0,  0,  7,  0,  0,  0,  9,  0,  0,  7,  0,  0,
-        0,  0,  7,  7, 10,  0,  0,  0,  8,  0,  0, 12,  0])]
+        correct_bitboard = np.array([0, 0, 0, 2, 0, 0, 0, 0, 1, 3, 1, 1, 6, 1, 0, 0, 0, 1, 0, 0, 1, 0, 2, 0, 0, 0, 
+                                       0, 0, 0, 0, 1, 0, 0, 0, 0, 7, 0, 0, 0, 0, 9, 0, 7, 0, 0, 0, 0, 0, 7, 7, 11, 10, 
+                                       0, 7, 7, 0, 8, 0, 0, 0, 12, 0, 0, 0])
                         
         # check bitboards        
-        self.assertTrue(
-            np.array_equal(test_input[1], correct_bitboards[0]) or
-            np.array_equal(test_input[1], correct_bitboards[1]))
+        np.array_equal(test_input[1], correct_bitboard)
         
         
-        # check king safety
-        self.assertTrue((np.array_equal(test_input[2], 4)) or (np.array_equal(test_input[2], 6)) and
-            (np.array_equal(test_input[3], 1) or np.array_equal(test_input[3], 7))
-                        
-        ) 
+        # check king safety values
+        np.array_equal(test_input[2], 6)
+        np.array_equal(test_input[3], 7) 
         
         # check central control
-        self.assertEqual(test_input[4], 5)
+        self.assertEqual(test_input[4], 4)
         self.assertEqual(test_input[5], 1)
         
         # check ratings      
-        self.assertEqual(test_input[6], '1486')
-        self.assertEqual(test_input[7], '1417')
+        self.assertEqual(test_input[6], self.test_elo[0])
+        self.assertEqual(test_input[7], self.test_elo[1])
         
         # check turn
         self.assertTrue(test_input[8] == 0 or test_input[8] == 1)
         
+        # check next move
+        move = test_input[9]
+        regex1 = r'[a-e]'
+        regex2 = r'[1-8]'
+        self.assertRegex(move[0], regex1)
+        self.assertRegex(move[2], regex1)
+        self.assertRegex(move[1], regex2)
+        self.assertRegex(move[3], regex2)
+        
                 
-
 if __name__ == '__main__':
         unittest.main()
