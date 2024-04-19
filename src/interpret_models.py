@@ -10,6 +10,8 @@ from sklearn.manifold import TSNE
 from joblib import load
 from prediction import decode_std
 import seaborn as sns
+from halo import Halo
+from pca import make_dir
 
 from interpret import show
 from interpret import set_visualize_provider
@@ -41,6 +43,7 @@ def combine_squares(shap_scaled, model):
     Sums all of the square SHAP values (easier to visualise the impact of the board position as a whole)
     
     :param shap_scaled: the scaled SHAP values
+    :param model: whether its the first or second model
     
     :return: SHAP values with squares summed to one column
     """
@@ -63,31 +66,61 @@ def combine_squares(shap_scaled, model):
             # loop through each set of values
             for j in range(64 + num):
                 # put first 7 values in new array
-                if j < num:
+                if j < 7:
                     temp_arr[j] = values[i][j]
-                # sum last 64 squares to one values and put into new arr
-                elif j == 63 + num:
+                # sum next 64 squares to one value and put into new arr
+                elif j == 70:
                     temp += values[i][j]
-                    temp_arr[num] = temp
+                    temp_arr[7] = temp
+                # if start_square exists then add to array
+                elif j == 71:
+                    temp_arr[8] = values[i][j]
+                else:
+                    temp += values[i][j]
+                    
             # add new array to main array
             all_values[i] = temp_arr
         all_shap[k] = all_values 
     
     return np.array(all_shap)
 
-def interpret_tree(model_start, model_end, X_test_pca_start, X_test_pca_end, pca_start, pca_end, X_test_start, X_test_end, plot, plot_type, model_name):
+def interpret_tree(model_start, model_end, X_test_pca_start, X_test_pca_end, pca_start, pca_end, X_test_start, X_test_end, plot, plot_type, model_name, suffix):
+    """
+    Creates SHAP plots from given model and data
     
+    :param model_start: first model
+    :param model_end: second model
+    :param X_test_pca_start: first set of PCA values
+    :param X_test_pca_end: second set of PCA values
+    :param pca_start: first PCA object
+    :param pca_end: second PCA object
+    :param X_test_start: first set of original values
+    :param X_test_end: second set of original values
+    :param plot: type of plot {'all', 'summary', 'waterfall', 'force', 'bar'}
+    :param plot_type: type of data to plot {'pca', 'original'}
+    :param model_name: name of model {'dt', 'gb'}
+    :param suffix: optional suffix for filenames
+    
+    :return: plots and saves SHAP plots
+    """
+
     # ---------------- ORIGINAL COLUMN NAMES ---------------- #
     
     # get feature column names (excluding squares)
     column_names_start = pd.read_csv('../data/lichess-2023-11-10k.csv').drop(columns=['board_pos', 'start_square', 'end_square']).columns.tolist()
     column_names_end = pd.read_csv('../data/lichess-2023-11-10k.csv').drop(columns=['board_pos', 'end_square']).columns.tolist()
     column_names_start = column_names_start[:7]
-    column_names_end = column_names_end[:8]
+    column_names_end = column_names_end[:7]
     
     # add column name for summed square shap values
     column_names_start.append('square_summary')
     column_names_end.append('square_summary')
+    column_names_end.append('start_square')
+    
+    # ---------------- ORIGINAL DATA ---------------- #
+    
+    X_test_combined_start = X_test_start[['w_safety', 'b_safety', 'w_central', 'b_central', 'w_rating', 'b_rating', 'turn', 'square_0']]
+    X_test_combined_end = X_test_end[['w_safety', 'b_safety', 'w_central', 'b_central', 'w_rating', 'b_rating', 'turn', 'square_0', 'start_square']]
     
     # ---------------- PCA COLUMN NAMES ---------------- #
     
@@ -111,62 +144,113 @@ def interpret_tree(model_start, model_end, X_test_pca_start, X_test_pca_end, pca
     # ---------------- COMBINE SQUARE VALUES ---------------- #
     
     all_shap_start = combine_squares(shap_scaled_start, 'start')
-    all_shap_end = combine_squares(shap_scaled_end, 'start')
+    all_shap_end = combine_squares(shap_scaled_end, 'end')
+    
     
     # ---------------- PLOTS ---------------- #
     
-    if plot == 'summary':
-        # save plots        
-        save_plot(shap_scaled_start, X_test_start, X_test_start.columns.tolist(), 'model_1', 'summary', model_name)
-        save_plot(shap_scaled_end, X_test_end, X_test_end.columns.tolist(), 'model_2', 'summary', model_name)
-
-    elif plot == 'waterfall':
-        # save plots
-        if plot_type == 'original':    
-            save_plot(all_shap_start, X_test_start, X_test_start.columns.tolist(), 'model_1', 'waterfall', model_name, explainer_start)
-            save_plot(all_shap_end, X_test_end, X_test_end.columns.tolist(), 'model_2', 'waterfall', model_name, explainer_end)
-        elif plot_type == 'pca':
-            save_plot(shap_pca_start, X_test_start, start_comps, 'model_1_pca', 'waterfall', model_name, explainer_start)
-            save_plot(shap_pca_end, X_test_end, end_comps, 'model_2_pca', 'waterfall', model_name, explainer_end)
+    
+    match plot:
+        case 'all':
+            # save all plots
+            save_plot(shap_values=shap_scaled_start, X_test=X_test_start, column_names=X_test_start.columns.tolist(), model_number='model_1', plot='summary', model_name=model_name, suffix=suffix)
+            save_plot(shap_values=shap_scaled_end, X_test=X_test_end, column_names=X_test_end.columns.tolist(), model_number='model_2', plot='summary', model_name=model_name, suffix=suffix)
             
-    elif plot == 'force':
-        # save plots
-        save_plot(shap_scaled_start, X_test_start, X_test_start.columns.tolist(), 'model_1', 'force', explainer_start)
-        save_plot(shap_scaled_end, X_test_end, X_test_end.columns.tolist(), 'model_2', 'force', explainer_end)
-        
-    # display saved plots as subplot
-    display_plots(plot, plot_type, model_name)
+            save_plot(shap_values=all_shap_start, X_test=X_test_combined_start, column_names=column_names_start, model_number='model_1', plot='waterfall', model_name=model_name, explainer=explainer_start, suffix=suffix)
+            save_plot(shap_values=all_shap_end, X_test=X_test_combined_end, column_names=column_names_end, model_number='model_2', plot='waterfall', model_name=model_name, explainer=explainer_end, suffix=suffix)
+                
+            save_plot(shap_values=shap_pca_start, X_test=X_test_start, column_names=start_comps, model_number='model_1_pca', plot='waterfall', model_name=model_name, explainer=explainer_start, suffix=suffix)
+            save_plot(shap_values=shap_pca_end, X_test=X_test_end, column_names=end_comps, model_number='model_2_pca', plot='waterfall', model_name=model_name, explainer=explainer_end, suffix=suffix)
+            
+            save_plot(shap_values=shap_scaled_start, X_test=X_test_start, column_names=X_test_start.columns.tolist(), model_number='model_1', model_name=model_name, plot='force', explainer=explainer_start, suffix=suffix)
+            save_plot(shap_values=shap_scaled_end, X_test=X_test_end, column_names=X_test_end.columns.tolist(), model_number='model_2', model_name=model_name, plot='force', explainer=explainer_end, suffix=suffix)
+            
+            save_plot(shap_values=shap_scaled_start, X_test=X_test_start, column_names=X_test_start.columns.tolist(), model_number='model_1', plot='bar', model_name=model_name, suffix=suffix)
+            save_plot(shap_values=shap_scaled_end, X_test=X_test_end, column_names=X_test_end.columns.tolist(), model_number='model_2', plot='bar', model_name=model_name, suffix=suffix)
+            
+        case 'summary':
+            # save plots 
+            save_plot(shap_values=shap_scaled_start, X_test=X_test_start, column_names=X_test_start.columns.tolist(), model_number='model_1', plot='summary', model_name=model_name, suffix=suffix)
+            save_plot(shap_values=shap_scaled_end, X_test=X_test_end, column_names=X_test_end.columns.tolist(), model_number='model_2', plot='summary', model_name=model_name, suffix=suffix)
 
-def save_plot(shap_values, X_test, column_names, model_number, plot, model_name, explainer=None):
+        case 'waterfall':
+            # save plots
+            if plot_type == 'original':    
+                save_plot(shap_values=all_shap_start, X_test=X_test_combined_start, column_names=column_names_start, model_number='model_1', plot='waterfall', model_name=model_name, explainer=explainer_start, suffix=suffix)
+                save_plot(shap_values=all_shap_end, X_test=X_test_combined_end, column_names=column_names_end, model_number='model_2', plot='waterfall', model_name=model_name, explainer=explainer_end, suffix=suffix)
+            elif plot_type == 'pca':
+                save_plot(shap_values=shap_pca_start, X_test=X_test_start, column_names=start_comps, model_number='model_1_pca', plot='waterfall', model_name=model_name, explainer=explainer_start, suffix=suffix)
+                save_plot(shap_values=shap_pca_end, X_test=X_test_end, column_names=end_comps, model_number='model_2_pca', plot='waterfall', model_name=model_name, explainer=explainer_end, suffix=suffix)
+        case 'force':
+            # save plots
+            save_plot(shap_values=shap_scaled_start, X_test=X_test_start, column_names=X_test_start.columns.tolist(), model_number='model_1', model_name=model_name, plot='force', explainer=explainer_start, suffix=suffix)
+            save_plot(shap_values=shap_scaled_end, X_test=X_test_end, column_names=X_test_end.columns.tolist(), model_number='model_2', model_name=model_name, plot='force', explainer=explainer_end, suffix=suffix)
+        case 'bar':
+            save_plot(shap_values=shap_scaled_start, X_test=X_test_start, column_names=X_test_start.columns.tolist(), model_number='model_1', plot='bar', model_name=model_name, suffix=suffix)
+            save_plot(shap_values=shap_scaled_end, X_test=X_test_end, column_names=X_test_end.columns.tolist(), model_number='model_2', plot='bar', model_name=model_name, suffix=suffix)
+
+    # display saved plots as subplot
+    if plot != 'all':
+        display_plots(plot, plot_type, model_name)
+
+def interpret_ebm(pca_start, scaler_start, ebm):
+    """
+    Interprets EBM model using InterpretML Explainer
+    
+    :param pca_start: first PCA object
+    :param pca_end: second PCA object
+    :param scaler_start: first scaler object
+    :param scaler_end: second scaler object
+    :param ebm: EBM model
+    
+    :return: plots explanations for EBM model
+    """
+    ebm_global = ebm.explain_global()
+    
+    print(ebm_global)
+    
+def save_plot(shap_values, X_test, column_names, model_number, plot, model_name, suffix, explainer=None):
     """
     Creates and saves SHAP plots
     
     :param shap_values: SHAP values to use in plot
     :param X_test: X_test values to use in plot
     :param column_names: feature names to use in plot
-    :param model_name: name of the model (1 or 2)
+    :param model_nunmber: name of the model (1 or 2)
     :param plot: type of plot {'summary', 'waterfall', 'force'}
+    :param model_name: name of the model ({'dt', 'gb', 'ebm'})
     :param explainer: if an explainer is needed for shap plot
     
     :return: saves plots to png files
     """
-
+    
+    # create folder if doesn't exist
+    plot_path = f'{PLOT_PREFIX}{model_name}/{plot}/'
+    make_dir(plot_path)
+    
+    
     # create the specified plot
-    if plot == 'summary':
-        shap.summary_plot(shap_values[0], X_test.values, feature_names=column_names, show=False)
-    elif plot == 'waterfall':
-        shap.waterfall_plot(shap.Explanation(values=shap_values[0][0], base_values=explainer.expected_value[0], data=X_test.iloc[0], feature_names=column_names), show=False)
-    elif plot == 'force':
-        shap.force_plot(explainer.expected_value[0], shap_values[0][0], X_test.values[0], feature_names=column_names, matplotlib=True, show=False)
+    match plot:
+        case 'summary':
+            shap.summary_plot(shap_values[0], X_test.values, feature_names=column_names, show=False)
+        case 'waterfall':
+            shap.waterfall_plot(shap.Explanation(values=shap_values[0][0], base_values=explainer.expected_value[0], data=X_test.iloc[0], feature_names=column_names), show=False)
+        case 'force':
+            shap.force_plot(explainer.expected_value[0], shap_values[0][0], X_test.values[0], feature_names=column_names, matplotlib=True, show=False)
+        case 'bar':
+            shap.summary_plot(shap_values[0], X_test.values, feature_names=column_names, plot_type='bar', show=False)
 
 
     # set title and save to file
     plt.title(model_number)
     plt.tight_layout()
-    plt.savefig(PLOT_PREFIX + f'{model_name}_{plot}_{model_number}.png')
+    if suffix:
+        plt.savefig(plot_path + f'{model_number}_{suffix}.png')
+    else:
+        plt.savefig(plot_path + f'{model_number}.png')
     plt.close()
         
-def display_plots(plot, plot_type, model_name):
+def display_plots(plot, plot_type, model_name, suffix):
     """
     Displays saved plots
     
@@ -175,17 +259,28 @@ def display_plots(plot, plot_type, model_name):
     
     :return: displays the saved plots as a subplot
     """
+    
+    plot_path = f'{PLOT_PREFIX}{model_name}/{plot}/'
+    
     # create subplot
     fig, axes = plt.subplots(1, 2, figsize=(12, 6))
     
     # get plots file paths
-    if plot_type == 'original':
-        plot_1 = plt.imread(PLOT_PREFIX + f'{model_name}_{plot}_model_1.png')
-        plot_2 = plt.imread(PLOT_PREFIX + f'{model_name}_{plot}_model_2.png')
-    elif plot_type == 'pca':
-        plot_1 = plt.imread(PLOT_PREFIX + f'{model_name}_{plot}_model_1_pca.png')
-        plot_2 = plt.imread(PLOT_PREFIX + f'{model_name}_{plot}_model_2_pca.png')
-    
+    if plot_type == 'pca':
+        if suffix:
+            plot_1 = plt.imread(plot_path + f'model_1_pca_{suffix}.png')
+            plot_2 = plt.imread(plot_path + f'model_2_pca_{suffix}.png')
+        else:
+            plot_1 = plt.imread(plot_path + 'model_1_pca.png')
+            plot_2 = plt.imread(plot_path + 'model_2_pca.png')
+    else:
+        if suffix:
+            plot_1 = plt.imread(plot_path + f'model_1_{suffix}.png')
+            plot_2 = plt.imread(plot_path + f'model_2_{suffix}.png')
+        else:
+            plot_1 = plt.imread(plot_path + 'model_1.png')
+            plot_2 = plt.imread(plot_path + 'model_2.png')
+
     # get plots from files and set titles
     axes[0].imshow(plot_1)
     axes[0].axis('off')
@@ -297,16 +392,20 @@ def pca_loadings(pca_start, pca_end, comps_1, comps_2):
     plt.ylabel('Principal Components')
     plt.show()
     
-def main():
+def main(args):
+    
     # ---------------- ARGUMENT HANDLING ---------------- #
     
-    parser = argparse.ArgumentParser(description="Model Selection")
-    parser.add_argument('--model', choices=['dt', 'gb', 'ebm'], required=True, help='Model to train')
-    parser.add_argument('--comps_1', required=True, help='Number of components to train model 1 with (folder must exist under "PCA/")')
-    parser.add_argument('--comps_2', required=True, help='Number of components to train model 2 with (folder must exist under "PCA/")')
-    parser.add_argument('--plot', choices=['summary', 'waterfall', 'force'], required=True, help="SHAP plot type")
-    parser.add_argument('--plot_type', choices=['original', 'pca'], required=True, help="Features to plot on the graph")
-    args = parser.parse_args()
+    if args.model == 'dt' or args.model == 'gb':
+        if not args.input:
+            print("'--input' must be specified for GB or DT.")
+            exit()
+        elif not args.plot:
+            print("'--plot' must be specified for GB or DT.")
+            exit()
+        elif args.plot == 'summary' and args.plot_type is None:
+            print("'--plot_type' must be specified for a waterfall plot {'original', 'pca'}.")
+            exit()
     
     # create model path
     model_path = f"{PATH_PREFIX}{args.model}/{args.model}_{args.comps_1}_{args.comps_2}/"
@@ -315,27 +414,53 @@ def main():
     if not os.path.isfile(f'{model_path}model_start.joblib') or not os.path.isfile(f'{model_path}model_end.joblib'):
         print("ERROR: No trained model exists. Train using python training.py")
         exit()
-    
+        
     # load models, scalers and pca
     pca_path = f"{PCA_PREFIX}{args.comps_1}_{args.comps_2}/"
     model_start = load(model_path + 'model_start.joblib')
     model_end = load(model_path + 'model_end.joblib')
     pca_start = load(pca_path + 'pca_start.joblib')
     pca_end = load(pca_path + 'pca_end.joblib')
+    scaler_start = load(pca_path + 'scaler_start.joblib')
     scaler_end = load(pca_path + 'scaler_end.joblib')
+            
+    if args.model == 'dt' or args.model == 'gb':
+        # check if given filename exists
+        if not os.path.isfile(f'{DATA_PREFIX}/{args.input}.csv'):
+            print("ERROR: No CSV file exists. Use preprocessing.py to create one.")
+            exit()
+            
+        # get input data
+        input_data = pd.read_csv(f'{DATA_PREFIX}/{args.input}.csv')
+        # get input data and board
+        X_start = input_data.drop(columns=['board_pos', 'end_square', 'start_square'])
+        X_end = input_data.drop(columns=['board_pos', 'end_square'])
     
+        # scale and perform pca
+        X_start_scaled = scaler_start.transform(X_start)
+        X_end_scaled = scaler_end.transform(X_end)
+        X_start_pca = pca_start.transform(X_start_scaled)
+        X_end_pca = pca_end.transform(X_end_scaled)
+
     if args.model == 'ebm':
-        pca_loadings(pca_start, pca_end, int(args.comps_1), int(args.comps_2))
+        with Halo(text=f'Interpreting predictions', color='grey', spinner="dots3"):
+            interpret_ebm(pca_start, scaler_start, model_start)
     elif args.model == 'gb' or args.model == 'dt':
-        # load trained model from file
-        X_val_start = pd.read_csv(pca_path + 'X_val_start.csv')
-        X_val_end = pd.read_csv(pca_path + 'X_val_end.csv')
-        X_val_end = scaler_end.transform(X_val_end)
-        X_val_end = pca_end.transform(X_val_end)
-        X_test_start = pd.read_csv(pca_path + 'X_test_start_og.csv')
-        X_test_end = pd.read_csv(pca_path + 'X_test_end_og.csv')
-        interpret_tree(model_start, model_end, X_val_start, X_val_end, pca_start, pca_end, X_test_start, X_test_end, args.plot, args.plot_type, args.model)
+        with Halo(text=f'Interpreting predictions', color='grey', spinner="dots3"):
+            interpret_tree(model_start, model_end, X_start_pca, X_end_pca, pca_start, pca_end, X_start, X_end, args.plot, args.plot_type, args.model, args.suffix)
+    elif args.model == 'pca':
+        with Halo(text=f'Interpreting PCA loadings', color='grey', spinner="dots3"):
+            pca_loadings(pca_start, pca_end, int(args.comps_1), int(args.comps_2))
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Model Selection")
+    parser.add_argument('--model', choices=['dt', 'gb', 'ebm'], required=True, help='Model to train')
+    parser.add_argument('--comps_1', required=True, help='Number of components to train model 1 with (folder must exist under "PCA/")')
+    parser.add_argument('--comps_2', required=True, help='Number of components to train model 2 with (folder must exist under "PCA/")')
+    parser.add_argument('--input', type=str, required=False, help='Input file for prediction')
+    parser.add_argument('--plot', choices=['all', 'summary', 'waterfall', 'force', 'bar'], required=False, help="SHAP plot type")
+    parser.add_argument('--plot_type', choices=['original', 'pca'], required=False, help="Features to plot on the graph")
+    parser.add_argument('--suffix', type=str, required=False, help="Optional suffix to add to filenames")
+    args = parser.parse_args()
+    main(args)

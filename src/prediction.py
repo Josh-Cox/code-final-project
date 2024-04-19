@@ -150,9 +150,6 @@ def make_predictions(model_name, comps_1, comps_2, batch, files=None):
     # scale and perform pca
     X_start = scaler_start.transform(X_start)
     X_start = pca_start.transform(X_start)
-        
-    # get correct number of components
-    X_start = X_start[:, :comps_1]
             
     
     # ---------------- PREDICTING START SQUARE ---------------- #
@@ -197,9 +194,6 @@ def make_predictions(model_name, comps_1, comps_2, batch, files=None):
     # scale and perform pca
     X_end = scaler_end.transform(X_end)
     X_end = pca_end.transform(X_end)
-    
-    # get correct number of components
-    X_end = X_end[:, :comps_2]
 
     # ---------------- PREDICTING END SQUARE ---------------- #
     
@@ -521,7 +515,7 @@ def main():
     parser.add_argument('--model', choices=['ebm', 'gb', 'dt'], required=True, help="Model file to predict with")
     parser.add_argument('--comps_1', type=int, required=True, help='Number of components used to train model 1')
     parser.add_argument('--comps_2', type=int, required=True, help='Number of components used to train model 2')
-    parser.add_argument('--input', type=str, required=False, help='Input file for prediction')
+    parser.add_argument('--input', type=str, required=True, help='Input file for prediction')
     parser.add_argument('--batch', action='store_true', help='If the model was batch trained')
     args = parser.parse_args()
     
