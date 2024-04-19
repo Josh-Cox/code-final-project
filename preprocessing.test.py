@@ -8,7 +8,7 @@ class TestPreprocessing(unittest.TestCase):
         """
         Sets up variables once for use in all tests
         """
-        self.test_data = open("data/testing.pgn")
+        self.test_data = open("unit_testing/testing.pgn")
         self.test_game = chess.pgn.read_game(self.test_data)
         self.test_moves = str(self.test_game.mainline_moves())
         self.test_fen = self.test_game.board().fen()
