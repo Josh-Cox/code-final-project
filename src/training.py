@@ -5,34 +5,25 @@ import pandas as pd
 import numpy as np
 import argparse
 import time
-import chess.pgn
 import os
-import pickle
 import copy
 
-from alive_progress import alive_bar
 from joblib import dump, load
 from halo import Halo
-from tqdm import tqdm
 
 from interpret.glassbox import ExplainableBoostingClassifier
-from interpret.provider import InlineProvider
-from interpret import set_visualize_provider
 
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.preprocessing import LabelEncoder
-from sklearn.metrics import accuracy_score, make_scorer, precision_score, recall_score, f1_score
-from sklearn.model_selection import GridSearchCV, RandomizedSearchCV, cross_val_score, KFold
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 from skopt import BayesSearchCV
 from skopt.space import Integer, Real
 
-from prediction import make_predictions, is_legal, is_legal_start, decode_std
+from prediction import is_legal, is_legal_start
 from pca import make_dir
 
 
 # ---------------- GLOBALS ---------------- #
-
-set_visualize_provider(InlineProvider())
 
 DATA_PREFIX = '../data/'
 MODEL_PREFIX = '../models/'

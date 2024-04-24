@@ -3,17 +3,13 @@ import pandas as pd
 from joblib import load
 import os
 import argparse
-from sklearn.preprocessing import LabelEncoder
 import matplotlib.pyplot as plt
 import numpy as np
-from sklearn.manifold import TSNE
 from joblib import load
-from prediction import decode_std
 import seaborn as sns
 from halo import Halo
 from pca import make_dir
 
-from interpret import show
 from interpret import set_visualize_provider
 from interpret.provider import InlineProvider
 set_visualize_provider(InlineProvider())
@@ -403,7 +399,7 @@ def main(args):
         elif not args.plot:
             print("'--plot' must be specified for GB or DT.")
             exit()
-        elif args.plot == 'summary' and args.plot_type is None:
+        elif args.plot == 'waterfall' and args.plot_type is None:
             print("'--plot_type' must be specified for a waterfall plot {'original', 'pca'}.")
             exit()
     

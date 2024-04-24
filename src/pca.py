@@ -1,31 +1,19 @@
 # ---------------- IMPORTS ---------------- #
 
 import os
-import time
 import argparse
 import pandas as pd
 import numpy as np
 import copy
 
 import matplotlib.pyplot as plt
-from joblib import dump, load
-import xgboost as xgb
-from prediction import is_legal
-
-from interpret import set_visualize_provider
-from interpret.provider import InlineProvider
-from interpret.glassbox import ExplainableBoostingClassifier
-from interpret import show
+from joblib import dump
 
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder, scale
-from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score, roc_auc_score
 from sklearn.decomposition import PCA
 
 # ---------------- GLOBALS ---------------- #
-
-set_visualize_provider(InlineProvider())
 
 
 DATA_PREFIX = '../data/'

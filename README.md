@@ -6,8 +6,73 @@ This is the final project of Josh Cox for the University of Exeter. We use diffe
 
 ## Table of Contents
 
+- [Prerequisites](#prerequisites)
 - [Running the Project](#running-the-project)
 - [Testing the Project](#testing-the-project)
+- [Contributions](#contributions)
+
+## Prerequisites
+
+This project uses [Python](https://www.python.org/downloads/) 3.12.3.
+To use this project you will need to install multiple libraries (all listed [here](#list-of-used-libraries)).
+
+Using a [virtual environment](https://docs.python.org/3/library/venv.html) is recommended.
+
+### Create and activate a virtual environment
+
+---
+
+<br>
+
+**To create a virtual environment named 'myvenv':**
+
+```sh
+python -m venv myvenv
+```
+
+<br>
+
+**Accessing 'myvenv' on Linux:**
+
+```sh
+source myvenv/bin/activate
+```
+
+**Accessing 'myvenv' on Windows (CMD):**
+
+```console
+myvenv\Scripts\activate.bat
+```
+
+<br>
+
+### Install dependencies
+
+---
+
+The dependencies can be installed using the provided `requirements.txt` file. Ensure you have navigated to the main project folder (`code-final-project`) in a terminal:
+
+```sh
+python -m pip install -r requirements.txt
+```
+
+<br>
+
+#### List of used libraries:
+
+- [numpy](https://numpy.org/)
+- [pandas](https://pandas.pydata.org/)
+- [matplotlib](https://matplotlib.org/)
+- [seaborn](https://seaborn.pydata.org/)
+- [joblib](https://joblib.readthedocs.io/en/stable/)
+- [chess](https://python-chess.readthedocs.io/en/latest/)
+- [alive-progress](https://pypi.org/project/alive-progress/1.0/)
+- [halo](https://pypi.org/project/halo/)
+- [xgboost](https://xgboost.readthedocs.io/en/stable/)
+- [scikit-learn](https://scikit-learn.org/stable/)
+- [scikit-optimize](https://scikit-optimize.github.io/stable/)
+- [interpret](https://interpret.ml/docs/)
+- [shap](https://shap.readthedocs.io/en/latest/)
 
 ## Running the Project
 
@@ -49,12 +114,12 @@ This will preprocess the data, and save it to a CSV file.
 
 ---
 
-Before running the PCA module ensure your preprocessed csv file is stored in the `/data` folder and that you have navigated to the `src` folder in a terminal.
+Before running the pca module ensure your preprocessed csv file is stored in the `/data` folder and that you have navigated to the `src` folder in a terminal.
 
 The module can be run with the following command:
 
 ```ps
-python PCA.py
+python pca.py
 ```
 
 #### Options:
@@ -69,7 +134,7 @@ python PCA.py
 **Example to run PCA on file with an elbow plot:**
 
 ```ps
-python PCA.py --plot elbow --file filename
+python pca.py --plot elbow --file filename
 ```
 
 The program will then show two plots visualising the PCA components for both the first and second model. After closing the plots, you will be asked for a number of components to use for each model. These are of type `int` and can be between 1 and the max number of components. The formatted data will the be saved to a file.
@@ -150,7 +215,7 @@ The program wil run the scikit-learn BayesSearch to tune the hyperparameters of 
 
 ---
 
-Before running the prediction module ensure you have trained a model using the training module and that your input file for predictions has been formatted using the preprocessing module. Then navigate to the `src` folder in a terminal.
+Before running the prediction module ensure you have trained a model using the `training` module and that your input file for predictions has been formatted using the `preprocessing` module. Then navigate to the `src` folder in a terminal.
 
 This command should be run with the positional `TYPE` parameter {`single` | `multiple`} to signify the type of input:
 
@@ -182,7 +247,7 @@ If a single prediction was chosen, the model will make predictions and the user 
 
 ---
 
-Before running the interpet_models module ensure you have trained a model using the training module and that you have navigated to the `src` folder in a terminal.
+Before running the interpet_models module ensure you have trained a model using the `training` module and that you have navigated to the `src` folder in a terminal.
 
 ```ps
 python interpret_models.py
@@ -219,3 +284,32 @@ python interpret_models.py --model dt --comps_1 3 --comps_2 8 --input filename -
 The program will run the SHAP interpretation of the model predictions on the given input. A subplot containing plots for both models will be shown, while the plots will be saved to files separately (with a suffix if given).
 
 ## Testing the Project
+
+The project contains a testing file for the `preprocessing` module. These are unit tests for each of the methods within the module. Once navigated to the main project folder in a terminal, it can be run with the following:
+
+```ps
+python preprocessing.test.py
+```
+
+The program will run all of the unit tests, reporting the details of failures.
+
+<br>
+
+**Example output for all tests succeeded:**
+
+```
+...........
+----------------------------------------------------------------------
+Ran 11 tests in 0.104s
+
+OK
+```
+
+## Contributions
+
+|               |                                                |
+| :-----------: | :--------------------------------------------: |
+|   `Author`    |                    Josh Cox                    |
+|   `License`   |                      MIT                       |
+| `Source Code` | https://github.com/Josh-Cox/code-final-project |
+|               |                                                |

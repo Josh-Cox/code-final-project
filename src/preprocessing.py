@@ -1,10 +1,8 @@
 # ---------------- IMPORTS ---------------- #
 
-import sys
+
 import chess.pgn
 import random
-import copy
-import time
 import re
 import os
 import numpy as np
