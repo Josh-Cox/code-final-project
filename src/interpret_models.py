@@ -23,7 +23,7 @@ def create_pca_columns(pca):
     """
     Create a column names list for each PCA component
     
-    :param pca: PCA
+    :param pca: PCA object
     
     :return: list of PCA component numbers
     """
@@ -188,22 +188,6 @@ def interpret_tree(model_start, model_end, X_test_pca_start, X_test_pca_end, pca
     # display saved plots as subplot
     if plot != 'all':
         display_plots(plot, plot_type, model_name)
-
-def interpret_ebm(pca_start, scaler_start, ebm):
-    """
-    Interprets EBM model using InterpretML Explainer
-    
-    :param pca_start: first PCA object
-    :param pca_end: second PCA object
-    :param scaler_start: first scaler object
-    :param scaler_end: second scaler object
-    :param ebm: EBM model
-    
-    :return: plots explanations for EBM model
-    """
-    ebm_global = ebm.explain_global()
-    
-    print(ebm_global)
     
 def save_plot(shap_values, X_test, column_names, model_number, plot, model_name, suffix, explainer=None):
     """
@@ -215,6 +199,7 @@ def save_plot(shap_values, X_test, column_names, model_number, plot, model_name,
     :param model_nunmber: name of the model (1 or 2)
     :param plot: type of plot {'summary', 'waterfall', 'force'}
     :param model_name: name of the model ({'dt', 'gb', 'ebm'})
+    :param suffix: optional suffix to add to filename when saving
     :param explainer: if an explainer is needed for shap plot
     
     :return: saves plots to png files
@@ -252,6 +237,8 @@ def display_plots(plot, plot_type, model_name, suffix):
     
     :param plot: type of plot {'summary', 'waterfall', 'force'}
     :param plot_type: type of plot data {'original', 'pca'}
+    :parma model_name: name of the model {'dt', 'gb', 'ebm'}
+    :param suffix: optional suffix to add to filename when saving   
     
     :return: displays the saved plots as a subplot
     """
@@ -290,7 +277,7 @@ def display_plots(plot, plot_type, model_name, suffix):
     plt.tight_layout()
     plt.show()
 
-def pca_loadings(pca_start, pca_end, comps_1, comps_2):
+def pca_loadings(pca_start, pca_end, comps_1, comps_2, suffix):
     """
     Get the loadings of the original features for each PCA component
     
@@ -298,6 +285,7 @@ def pca_loadings(pca_start, pca_end, comps_1, comps_2):
     :param pca_end: PCA for model 2
     :param comps_1: number of components for model 1
     :param comps_1: number of components for model 2
+    :param suffix: optional suffix to add to filename when saving
     
     :return: display specified plot of loadings
     """
@@ -378,6 +366,19 @@ def pca_loadings(pca_start, pca_end, comps_1, comps_2):
     plt.title('PCA Loadings Heatmap For Model 1')
     plt.xlabel('Original Features')
     plt.ylabel('Principal Components')
+
+    # create folder if doesn't exist
+    plot_path = f'{PLOT_PREFIX}PCA/'
+    make_dir(plot_path)
+    
+    # set title and save to file
+    plt.title('Model 1 PCA Loadings')
+    plt.tight_layout()
+    if suffix:
+        plt.savefig(plot_path + f'loadings_{comps_1}_{comps_2}_model1_{suffix}.png')
+    else:
+        plt.savefig(plot_path + f'loadings_{comps_1}_{comps_2}_model1.png')
+
     plt.show()
     
     # heatmap model 2
@@ -386,8 +387,151 @@ def pca_loadings(pca_start, pca_end, comps_1, comps_2):
     plt.title('PCA Loadings Heatmap For Model 2')
     plt.xlabel('Original Features')
     plt.ylabel('Principal Components')
+
+    # set title and save to file
+    plt.title('Model 2 PCA Loadings')
+    plt.tight_layout()
+    if suffix:
+        plt.savefig(plot_path + f'loadings_{comps_1}_{comps_2}_model2_{suffix}.png')
+    else:
+        plt.savefig(plot_path + f'loadings_{comps_1}_{comps_2}_model2.png')
+
     plt.show()
     
+def interpret_ebm(comps_1, comps_2, num_inputs, files):
+    """
+    Interprets EBM model using InterpretML Explainer
+    
+    :param comps_1: number of components to use for model 1
+    :param comps_2: number of components to use for model 2
+    :param num_inputs: number of inputs to interpret (no larger than file size)
+    :param files: list of files to use
+    
+    :return: plots explanations for EBM model
+    """
+
+    # loop through each file
+    for num in files:
+
+        # get filename
+        filename = f'lichess-{num}-{num+200}-25k'
+
+        # get data
+        X_start, X_end, model_start, model_end = get_data(filename, comps_1, comps_2)
+
+        # get explainations
+        values_start = model_start.explain_local(X_start[:num_inputs])
+        values_end = model_end.explain_local(X_end[:num_inputs])
+
+        # get mean values
+        mean_start = get_mean_values(values_start, num_inputs)
+        mean_end = get_mean_values(values_end, num_inputs)
+
+        # plot values
+        plot_values(mean_start, mean_end, str(num))
+
+def get_data(input_file, comps_1, comps_2):
+    """
+    Gets all of the needed data from files and preprares.
+
+    :param input_file: file to make predictions with
+    :param comps_1: number of components to use for model 1
+    :param comps_2: number of components to use for model 2
+
+    :return: relevent input data and models
+    """
+    # get models
+    model_start = load(f'{PATH_PREFIX}ebm/ebm_{comps_1}_{comps_2}/model_start.joblib')
+    model_end = load(f'{PATH_PREFIX}ebm/ebm_{comps_1}_{comps_2}/model_end.joblib')
+    
+    # get pca and scalers
+    scaler_start = load(f'{PATH_PREFIX}ebm/ebm_{comps_1}_{comps_2}/scaler_start.joblib')
+    scaler_end = load(f'{PATH_PREFIX}ebm/ebm_{comps_1}_{comps_2}/scaler_end.joblib')
+    pca_start = load(f'{PATH_PREFIX}ebm/ebm_{comps_1}_{comps_2}/pca_start.joblib')
+    pca_end = load(f'{PATH_PREFIX}ebm/ebm_{comps_1}_{comps_2}/pca_end.joblib')
+    
+    # get input data
+    input_data = pd.read_csv(f'{DATA_PREFIX}{input_file}.csv')
+    
+    X_start = input_data.drop(columns=['board_pos', 'end_square', 'start_square'])
+    y_start = input_data[['start_square']]
+    X_end = input_data.drop(columns=['board_pos', 'end_square'])
+    y_start = input_data[['end_square']]
+    
+    # scale and perform pca
+    X_start_scaled = scaler_start.transform(X_start)
+    X_end_scaled = scaler_end.transform(X_end)
+    X_start_pca = pca_start.transform(X_start_scaled)
+    X_end_pca = pca_end.transform(X_end_scaled)
+
+    return X_start_pca, X_end_pca, model_start, model_end
+
+def get_mean_values(values, num_inputs):
+    """
+    Gets the mean values from all of the PCA values given by the explainer
+
+    :param values: values given by explainer
+    :param num_inputs: number of inputs to interpret (no larger than file size)
+
+    :return: mean values
+    """
+    total_pca = {}
+    
+    for i in range(0, num_inputs):
+        item = values.data(key=i)
+        for key, value in enumerate(item['scores']):
+            temp_total = 0
+            for number in value:
+                temp_total += number
+            total_pca[f'PC{key+1}'] = total_pca.get(f'PC{key+1}', 0) + temp_total
+            
+    # loop through dividing by num_inputs (to get mean)
+    for key in total_pca:
+        total_pca[key] = total_pca.get(key, 0) / 10
+    
+    return total_pca
+
+def plot_values(mean_start, mean_end, suffix):
+    """
+    Plots the mean values on a bar chart
+
+    :param mean_start: mean values for model 1
+    :param mean_end: mean values for model 2
+    :param suffix: optional suffix to add to filename when saving
+
+    :return: plot the mean values and save plot to file
+    """
+
+    # create folder if doesn't exist
+    plot_path = f'{PLOT_PREFIX}ebm/'
+    make_dir(plot_path)
+
+    # get values and axis labels
+    labels_start = list(mean_start.keys())
+    labels_end = list(mean_end.keys())
+    mean_values_start = list(mean_start.values())
+    mean_values_end = list(mean_end.values())
+    
+    # create plot
+    plt.figure(figsize=(10, 6)) 
+    plt.bar(labels_start, mean_values_start)
+    
+    plt.xlabel('PCA Component') 
+    plt.ylabel('Mean Value')  
+    plt.title('Mean Impact Values for PCA Components Model 1')  
+    plt.savefig(f'{plot_path}/impact_1_{suffix}.png')
+    plt.close()
+    
+    # create plot
+    plt.figure(figsize=(10, 6)) 
+    plt.bar(labels_end, mean_values_end)
+    
+    plt.xlabel('PCA Component') 
+    plt.ylabel('Mean Value')  
+    plt.title('Mean Impact Values for PCA Components Model 2')  
+    plt.savefig(f'{plot_path}/impact_2_{suffix}.png')
+    plt.close()
+
 def main(args):
     
     # ---------------- ARGUMENT HANDLING ---------------- #
@@ -438,17 +582,26 @@ def main(args):
         X_start_pca = pca_start.transform(X_start_scaled)
         X_end_pca = pca_end.transform(X_end_scaled)
 
+
     if args.model == 'ebm':
+        # define the number of inputs to interpret (must be no larger than amount of inputs in given files)
+        num_inputs = 25000
+
+        # define different files to use (expected format of file 'lichess-{num}-{num + 200}-{num_inputs}k)
+        # Example file names: [lichess-1100-1300-50k, lichess-1500-1700-50k] --> 'files' list should be [1100, 1500]
+
+        files = [900, 1100, 1300, 1500, 1700, 1900]
+
         with Halo(text=f'Interpreting predictions', color='grey', spinner="dots3"):
-            interpret_ebm(pca_start, scaler_start, model_start)
+            interpret_ebm(args.comps_1, args.comps_2, num_inputs, files)
+
     elif args.model == 'gb' or args.model == 'dt':
         with Halo(text=f'Interpreting predictions', color='grey', spinner="dots3"):
             interpret_tree(model_start, model_end, X_start_pca, X_end_pca, pca_start, pca_end, X_start, X_end, args.plot, args.plot_type, args.model, args.suffix)
     elif args.model == 'pca':
         with Halo(text=f'Interpreting PCA loadings', color='grey', spinner="dots3"):
-            pca_loadings(pca_start, pca_end, int(args.comps_1), int(args.comps_2))
-
-
+            pca_loadings(pca_start, pca_end, int(args.comps_1), int(args.comps_2), args.suffix)
+        
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Model Selection")
     parser.add_argument('--model', choices=['dt', 'gb', 'ebm'], required=True, help='Model to train')

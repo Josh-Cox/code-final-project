@@ -1,6 +1,5 @@
 # ---------------- IMPORTS ---------------- #
 
-
 import chess.pgn
 import random
 import re
@@ -236,6 +235,7 @@ def check_pawns_in_file(color, checking_pos, bitboard):
 
     :param color: color pawn to check for
     :param checking_pos: starting position to check for pawn (moves up the file from this position)
+    :param bitboard: board postion as a bitboard
     
     :return: calculated points value
     """
@@ -276,6 +276,10 @@ def check_files(color, king_edge, king_pos, bitboard):
     Checks appropriate files for pawns
     
     :param color: color pawns to check for
+    :param king_edge: if king is at a board edge - which one
+    :param bitboard: board position as a bitboard
+
+    :return: safety points
     """
     
     # initialize safety
@@ -319,10 +323,9 @@ def king_safety_eval(king_pos, bitboard):
     Evaluates the safety of given king (cap of 3 pushes for each pawn)
 
     :param king_pos: position of king to evaluate
-    :param method: method to use (standard or exponential)
     :param bitboard: bitboard of position
+
     :return: value to represent evaluation of king safety
-    
     """
                 
     king_edge = [check_king_edges(king_pos[0], 'w'), check_king_edges(king_pos[1], 'b')]
@@ -335,6 +338,8 @@ def central_control_eval(board_pos):
     Takes a position (as a python-chess board) and returns values for white and black central control
     
     :param board_pos: python-chess board position
+
+    :return: central control value
     """
     
     # default center control
@@ -352,8 +357,10 @@ def central_control_eval(board_pos):
         chess.D5: "d5",
     }
     
+    # define center squares
     center_attacked = [chess.E4, chess.E5, chess.D4, chess.D5]
         
+    # loop through squares
     for square in center_attacked:
         
         # check attacked squares
@@ -370,7 +377,15 @@ def central_control_eval(board_pos):
         
     return np.array(central_control)
 
-def encode_move_std(move):    
+def encode_move_std(move):
+    """
+    Encode a move from letters and number to only numbers
+
+    :param move: move to encode
+
+    :return: encoded move
+    """ 
+
     # Convert to list
     move = [*str(move)]
     
@@ -404,21 +419,33 @@ def encode_move_std(move):
     return str(move)
 
 def get_legal_moves(position):
+    """
+    Get all of the legal move in the position
+
+    :param position: board position
+
+    :return: list of legal moves
+    """
+
     return [position.san(move) for move in position.legal_moves]
 
 def create_model_input(game, r_to=0, r_from=0, testing_move_number=-1, turn=1, time_control_check=True):
     """
     Takes the game and creates an input for a machine learning model
     
-    :param game: Game to create input from
-    :param method: method for king safety evaluation (standard or exponential)
+    :param game: game to create input from
+    :param r_from: lower bound for player rating
+    :param r_to: upper bound for player rating
     :param testing_move_number: used for choosing a specific position instead of random (-1 is random pos)
+    :param turn: turn to pick (w or b)
+    :parm time_control_check: bool to filter only 10 minute games
     """    
     
     # check game is not none
     if game is None:
         return -1
     
+    # check game is ten minutes
     if time_control_check and not re.search(r"600[^\d]*", game.headers["TimeControl"]):
         return None
     
@@ -434,9 +461,11 @@ def create_model_input(game, r_to=0, r_from=0, testing_move_number=-1, turn=1, t
     # get board position and next move
     temp = get_random_pos(game, testing_move_number, turn)
     
+    # if no positon returned
     if temp == None:
         return None
     
+    # filter out promotional moves
     board_pos = temp[0]
     next_move = str(temp[1])
     if len(next_move) == 5: return None
@@ -455,9 +484,7 @@ def create_model_input(game, r_to=0, r_from=0, testing_move_number=-1, turn=1, t
     # get turn color
     turn = find_turn(board_pos)
     
-    # change bitboard from list to string
-    # bitboard = "".join([str(i) for i in bitboard])
-
+    # return all of the data
     data = [board_pos, bitboard, king_safety[0], king_safety[1], central_control[0], central_control[1], player_ratings[0], player_ratings[1], turn, next_move]
     
     return data
@@ -466,9 +493,13 @@ def generate_df(filename, num_inputs, r_from, r_to, start_index=0):
     """
     Main function that runs the preprocessing on the chess games database
     
-    :param dbpath: path to the database of chess games
-    :param k_safety_method: method for evaluating king safety (standard or exponential)
-    :param encode-method: method for encoding next move (value, binary, binary + vector)
+    :param filename: path to the database of chess games
+    :param num_inputs: number of inputs to generate from file (if larger than file then whole file will be used)
+    :param r_from: lower bound for player rating
+    :param r_to: upper bound for player rating
+    :param start_index: index of game to start from
+
+    :return: save pandas dataframe of preprocessed inputs to file
     """
     
     # set the file path
@@ -476,7 +507,6 @@ def generate_df(filename, num_inputs, r_from, r_to, start_index=0):
     
     # access games database
     pgn = open(dbpath)
-    
     
     # get to start index position
     if start_index > 0:
@@ -487,7 +517,6 @@ def generate_df(filename, num_inputs, r_from, r_to, start_index=0):
                 chess.pgn.skip_game(pgn)
                 index_count += 1
                 skip_bar()
-
     
     if num_inputs == -1:
         # create list of inputs
@@ -517,6 +546,7 @@ def generate_df(filename, num_inputs, r_from, r_to, start_index=0):
                     count += 1
                     bar()
     
+    # generate column names
     columns = ["board_pos", "bitboard", "w_safety", "b_safety", "w_central", "b_central", "w_rating", "b_rating", "turn", "next_move"]
     
     # convert to dataframe    
@@ -526,8 +556,6 @@ def generate_df(filename, num_inputs, r_from, r_to, start_index=0):
     for i in range(64):
         df[f'square_{i}'] = df['bitboard'].apply(lambda x: x[i])
         
-    
-
     # encode and convert to start and end squares
     df['next_move_encoded'] = df['next_move'].apply(encode_move_std)
     df['start_square'] = df['next_move_encoded'].str[:2]
@@ -548,6 +576,16 @@ def generate_df(filename, num_inputs, r_from, r_to, start_index=0):
     df.to_csv(DATA_PREFIX + f'{filename}.csv', index=False)
 
 def create_single_input(filename, move_number, turn=1):
+    """
+    Preprocesses a single game input
+
+    :param filename: path of file of pgn game to use
+    :param move_number: move number to predict
+    :param turn: turn to predict
+
+    :return: save pandas dataframe of input to file
+    """
+
     # set the file path
     dbpath = f'../data/{filename}'
     
@@ -574,7 +612,8 @@ def create_single_input(filename, move_number, turn=1):
     df.to_csv(DATA_PREFIX + f'{filename}_single.csv', index=False)
     
 def main():
-    # ARGUMENT HANDLING
+    # ---------------- ARGUMENT HANDLING ---------------- #
+
     parser = argparse.ArgumentParser(description="Model Selection")
     parser.add_argument('type', choices=['single', 'multiple'], help="Type of function to run")
     parser.add_argument('--n_inputs', type=int, required=False, help="[Multiple Inputs] Number of inputs to use (-1 for all)")
@@ -608,10 +647,6 @@ def main():
             exit()
         else:
             generate_df(args.file, args.n_inputs, args.r_from, args.r_to, args.start)
-            
-    
-    
-    
 
 if __name__ == "__main__":
     main()

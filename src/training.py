@@ -29,16 +29,14 @@ DATA_PREFIX = '../data/'
 MODEL_PREFIX = '../models/'
 PCA_PREFIX = '../PCA/'
 
-def train_models(model_name, comps_start, comps_end, batch=None, hyper=False, encoding_method='std'):
+def train_models(model_name, comps_start, comps_end, hyper=False):
     """
     Trains the models with the given dataframe and saves it to a .joblib file. Also used for hyperparameter training (--hyper)
 
     :param model_name: name of the model ('dt', 'gb', 'ebm)
-    :param folder: name of folder for number of components (e.g. 2 or 10)
-    :param batch, default=None: whether to use batch training (if yes then number of batches)
-    :param test, default=False: whether to use train_test_split and run model predictions
+    :param comps_start: number of components to train model 1 with)
+    :param comps_end: number of components to train model 2 with)
     :param hyper, default=False: whether to tune hyperparmeters
-    :param encoding_method, default='std': encoding method for 'next_move_encoded'
     """
     
     # check if given folder exists
@@ -71,12 +69,8 @@ def train_models(model_name, comps_start, comps_end, batch=None, hyper=False, en
     
     
     # ---------------- CREATE DIRECTORIES ---------------- #
-    
-    if batch:
-        model_path = f'{MODEL_PREFIX}{str(model_name)}/{str(model_name)}_{comps_start}_{comps_end}_batch'
-    else:
-        model_path = f'{MODEL_PREFIX}{str(model_name)}/{str(model_name)}_{comps_start}_{comps_end}'
-        
+
+    model_path = f'{MODEL_PREFIX}{str(model_name)}/{str(model_name)}_{comps_start}_{comps_end}'
     make_dir(model_path)
 
     # ---------------- SAVE PCA & SCALER TO FILE ---------------- #
@@ -93,24 +87,21 @@ def train_models(model_name, comps_start, comps_end, batch=None, hyper=False, en
    # ---------------- DATA ENCODING ---------------- #
 
     # keep original versions for combining models later
-    # X_val_start_og = X_val_start
     X_val_end_og = copy.deepcopy(X_val_end)
     
     # perform scaling
-    # X_val_start = scaler_start.transform(X_val_start)
     X_val_end = scaler_end.transform(X_val_end)
     
     # perform pca
-    # X_val_start = pca_start.transform(X_val_start)
     X_val_end = pca_end.transform(X_val_end)
     
     # convert to dataframe
-    # X_val_start = pd.DataFrame(X_val_start, columns=[f'PC{i+1}' for i in range(comps_start)])
     X_val_end = pd.DataFrame(X_val_end, columns=[f'PC{i+1}' for i in range(int(comps_end))])
    
     # change shape
     y_train_start = np.ravel(y_train_start)
     y_train_end = np.ravel(y_train_end)
+
     # create encoders
     le_start = LabelEncoder()
     le_end = LabelEncoder()
@@ -127,14 +118,13 @@ def train_models(model_name, comps_start, comps_end, batch=None, hyper=False, en
     y_train_start = le_start.transform(y_train_start)
     y_train_end = le_end.transform(y_train_end)
     
+    # combine data
     combined_y_start = le_start.transform(combined_data_start)
     combined_y_end = le_end.transform(combined_data_end)
-
     combined_X_start = pd.concat([X_train_start, X_val_start], ignore_index=True)
     combined_X_end = pd.concat([X_train_end, X_val_end], ignore_index=True)
     
     # save label encoder classes for later use
-    # np.save(f"{MODEL_PREFIX}{str(model_name)}/{str(model_name)}_{comps_start}_{comps_end}/classes_start.npy", le_start.classes_)
     np.save(f"{MODEL_PREFIX}{str(model_name)}/{str(model_name)}_{comps_start}_{comps_end}/classes_start.npy", le_start.classes_)
     np.save(f"{MODEL_PREFIX}{str(model_name)}/{str(model_name)}_{comps_start}_{comps_end}/classes_end.npy", le_end.classes_)
     
@@ -143,12 +133,12 @@ def train_models(model_name, comps_start, comps_end, batch=None, hyper=False, en
     # start time of training
     start_time = time.time()
     
-    # initialise model
+    # initialise models
     model_start, model_end = None, None
     
     # if tuning hyperparameters
     if hyper: 
-        tune_hyper(combined_X_start, combined_X_end, combined_y_start, combined_y_end, combined_boards_start, combined_boards_end, model_name)
+        tune_hyper(combined_X_start, combined_X_end, combined_y_start, combined_y_end, model_name)
         exit()
     else:
         # create and train correct model
@@ -243,14 +233,12 @@ def train_models(model_name, comps_start, comps_end, batch=None, hyper=False, en
     y_val_start = list(y_val_start['start_square'])
     y_val_end = list(y_val_end['end_square'])
     
-    
     # create legal predictions lists
     filtered_pred_start = []
     filtered_val_start = []
     filtered_pred_end = []
     filtered_val_end = []
     
-
     # filter illegal moves
     for i in range(len(pred_start)):
         # check is legal (non-empty square)
@@ -323,72 +311,20 @@ def train_models(model_name, comps_start, comps_end, batch=None, hyper=False, en
         f.write(f"Accuracy: {acc_overall}\nF1-Score: {f1}\nPrecision: {precision}\nRecall: {recall}")
         
     return acc_overall
-    
-def score_function_start(model, X, y):
-    
-    boards = X['board_pos']
-    X = X.drop(coulumns=['board_pos'])
-    
-    # predict
-    preds = model.predict(X)
 
-    # create legal predictions lists
-    filtered_pred = []
-    filtered_acc = []
-
-    # filter illegal moves
-    for i in range(len(preds)):
-        # check is legal (non-empty square)
-        if is_legal_start(boards[i], preds[i]):
-            filtered_pred.append(preds[i])
-            filtered_acc.append(y[i])
-    
-    # return accuracy
-    accuracy_s = accuracy_score(filtered_acc, filtered_pred)
-    print(accuracy_s)
-    return accuracy_s
-
-def score_function_end(model, X, y):
-    
-    # predict
-    preds = model.predict(X)
-    
-    # convert to lists
-    global train_boards_end
-    global start_squares
-    boards = list(train_boards_end['board_pos'])
-
-    # create legal predictions lists
-    filtered_pred = []
-    filtered_acc = []
-
-    # filter illegal moves
-    for i in range(len(preds)):
-        # create move
-        pred_move = str(start_squares[i]) + str(preds[i])
-        # check is legal
-        if is_legal(boards[i], pred_move):
-            filtered_pred.append(preds[i])
-            filtered_acc.append(y[i])
-    
-    # return accuracy
-    acc =  accuracy_score(filtered_acc, filtered_pred)
-    return acc
-        
-
-def tune_hyper(X_start, X_end, y_start, y_end, combined_boards_start, combined_boards_end, model_name):
+def tune_hyper(X_start, X_end, y_start, y_end, model_name):
     """
     Trains models with different hyper parameters and records accuracy
     
-    :param X_train: input training data
-    :param y_trai: output training data
-    :param X_val: input validation data
-    :param y_val: output validation data
-    :param val_boards: boards of the validation data
+    :param X_start: input model 1 training data
+    :param X_end: input model 2 training data
+    :param y_start: output model 1 training data
+    :param y_end: output model 2 training data
     :param model_name: name of the model
     """
     
     # ---------------- DEFINE MODEL SPECIFIC PARAMETERS ---------------- #
+    
     dt_params = {
         'criterion': ['gini', 'entropy'],
         'max_depth': Integer(1, 20),
@@ -406,7 +342,6 @@ def tune_hyper(X_start, X_end, y_start, y_end, combined_boards_start, combined_b
     }
     
     ebm_params = {
-        # 'max_bins': [1024, 4096, 16384, 65536],
         'validation_size': [0.1, 0.15, 0.2],
         'learning_rate': [0.02, 0.01, 0.005, 0.0025],
         'greedy_ratio': [0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 4.0],
@@ -419,34 +354,10 @@ def tune_hyper(X_start, X_end, y_start, y_end, combined_boards_start, combined_b
         'interactions': [0],
         }
     
-    # ---------------- DEFINE VARIABLES ---------------- #
-    
-    # convert to array
-    # val_boards = list(val_boards['board_pos'])
-
-
-    # ---------------- WIPE OUTPUT FILE ---------------- #
-    
-    # output_path_start = f"../hyperparameters/{model_name}_start.txt"
-    # output_path_end = f"../hyperparameters/{model_name}_end.txt"
-    # if os.path.exists(output_path_start):
-    #     os.remove(output_path_start)
-    # if os.path.exists(output_path_end):
-    #     os.remove(output_path_end)
-        
-    # f_start = open(output_path_start, "w")
-    # f_start.close()
-    # f_end = open(output_path_end, "w")
-    # f_end.close()
-    
     # ---------------- RUN PARAMETER TUNING ---------------- #
 
     # define number of loops (for progress bar)
     print("\nTuning Hyperparameters...")
-    
-    # initialise model and grid search
-    model_start, model_end = None, None
-    grid_search_start, grid_search_end = None, None
 
     # use correct model
     match model_name:
@@ -463,18 +374,18 @@ def tune_hyper(X_start, X_end, y_start, y_end, combined_boards_start, combined_b
     
     # ---------------- TRAIN MODELS AND SAVE BEST ---------------- #
 
-    # opt_start.fit(X_start, y_start)
-    # best_params_start = opt_start.best_params_
-    # best_score_start = opt_start.best_score_
+    opt_start.fit(X_start, y_start)
+    best_params_start = opt_start.best_params_
+    best_score_start = opt_start.best_score_
     
-    # # write to files
-    # with open(f"../hyperparameters/{model_name}_start.txt", "a") as f:
-    #     f.write(f"MODEL: {model_name}\n")
-    #     f.write(f"\nParameters Tested: {gb_params}\nBest Parameters: {best_params_start}\nBest Mean CV Score: {best_score_start}\n--------------------")         
+    # write to files
+    with open(f"../hyperparameters/{model_name}_start.txt", "a") as f:
+        f.write(f"MODEL: {model_name}\n")
+        f.write(f"\nParameters Tested: {gb_params}\nBest Parameters: {best_params_start}\nBest Mean CV Score: {best_score_start}\n--------------------")         
         
-    # # print results     
-    # print(f"\nModel 1 Best Hyperparameters:\n{best_params_start}")
-    # print(f"\nModel 1 Mean CV Score: {best_score_start}\n")
+    # print results     
+    print(f"\nModel 1 Best Hyperparameters:\n{best_params_start}")
+    print(f"\nModel 1 Mean CV Score: {best_score_start}\n")
 
     opt_end.fit(X_end, y_end)
     best_params_end = opt_end.best_params_
@@ -489,7 +400,6 @@ def tune_hyper(X_start, X_end, y_start, y_end, combined_boards_start, combined_b
     print(f"\nModel 2 Best Hyperparameters:\n{best_params_end}")
     print(f"\nModel 2 Mean CV Score: {best_score_end}\n")
 
-  
 def train_params(model, X_train, y_train, X_val, y_val, val_boards):
     """
     Trains the given model and returns its accuracy
@@ -537,11 +447,14 @@ def train_model(X_train_start, X_train_end, y_train_start, y_train_end, model_st
     """
     Trains the given model
     
-    :param X_train: training input data for model
-    :param y_train: training output data for model
-    :param model: the model to train
+    :param X_train_start: training input data for model 1
+    :param X_train_end: training input data for model 2
+    :param y_train_start: training output data for model 1
+    :param y_train_end: training output data for model 2
+    :param model_start: model 1 to train
+    :param model_end: model 2 to train
     
-    :return: the trained model
+    :return: the trained models
     """
     
     # train models with spinners
@@ -553,25 +466,18 @@ def train_model(X_train_start, X_train_end, y_train_start, y_train_end, model_st
     return model_start, model_end
 
 def main():
-
-    
     # ---------------- ARGUMENT HANDLING ---------------- #
     
     parser = argparse.ArgumentParser(description="Model Selection")
     parser.add_argument('--model', choices=['dt', 'gb', 'ebm'], required=True, help='Model to train')
     parser.add_argument('--comps_1', required=True, help='Number of components to train model 1 with (folder must exist under "PCA/")')
     parser.add_argument('--comps_2', required=True, help='Number of components to train model 2 with (folder must exist under "PCA/")')
-    parser.add_argument('--batch', type=int, help='Number of batches train model in (Used if model is crashing)')
     parser.add_argument('--hyper', action='store_true', required=False, help="Whether to perform hyperparameter tuning")
     args = parser.parse_args()
     
-    # ---------------- DEFINE VARIABLES ---------------- #
-    
-    encoding_method = "std"
-    
     # ---------------- TRAIN MODEL ---------------- #
     
-    train_models(args.model, args.comps_1, args.comps_2, args.batch, args.hyper)
+    train_models(args.model, args.comps_1, args.comps_2, args.hyper)
     
 if __name__ == '__main__':
     main()

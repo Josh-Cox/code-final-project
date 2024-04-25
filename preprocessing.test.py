@@ -168,7 +168,6 @@ class TestPreprocessing(unittest.TestCase):
         self.assertRegex(move[2], regex1)
         self.assertRegex(move[1], regex2)
         self.assertRegex(move[3], regex2)
-        
-                
+                        
 if __name__ == '__main__':
         unittest.main()

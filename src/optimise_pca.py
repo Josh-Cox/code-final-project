@@ -10,16 +10,10 @@ import pandas as pd
 
 from joblib import dump
 
-from interpret import set_visualize_provider
-from interpret.provider import InlineProvider
-
-
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 
 # ---------------- GLOBALS ---------------- #
-
-set_visualize_provider(InlineProvider())
 
 DATA_PREFIX = '../data/'
 FEATURE_PREFIX = '../feature_importance/'
@@ -31,8 +25,10 @@ def create_pca(df, num_comps_start, num_comps_end):
     Perform scaling and PCA on data
     
     :param df: dataframe to use
-    :plot_type: the type of plot ('bar' or 'elbow')
-    :param test: whether to use a test set
+    :num_comps_start: list of component values to use for model 1
+    :num_comps_end: list of component values to use for model 2
+    
+    :return: saves pca values to file
     """
     
     # ---------------- DEFINE VARIABLES ---------------- #
@@ -51,7 +47,6 @@ def create_pca(df, num_comps_start, num_comps_end):
     # save start square column for model 2 testing
     start_squares = X_val_end[['start_square']]
 
-    
     # ---------------- SCALING & PCA ---------------- #
     
     # apply scaling
@@ -59,7 +54,6 @@ def create_pca(df, num_comps_start, num_comps_end):
     X_train_end = scaler_end.fit_transform(X_train_end)
     X_val_start = scaler_start.transform(X_val_start)
     
-                
     # apply pca
     pca_start = pca_start.fit(X_train_start)
     pca_end = pca_end.fit(X_train_end)
@@ -89,7 +83,6 @@ def create_pca(df, num_comps_start, num_comps_end):
         print(f'ERROR: Number of components invalid.\nSetting to MIN=1')
         num_comps_end = 1
 
-
     # save boards to file
     train_boards_start.to_csv(pca_path + 'train_boards_start.csv', index=False)
     train_boards_end.to_csv(pca_path + 'train_boards_end.csv', index=False)
@@ -103,7 +96,6 @@ def create_pca(df, num_comps_start, num_comps_end):
     df_train_end = pd.DataFrame(pca_train_end, columns=[f'PC{i+1}' for i in range(num_comps_end)])
     
     df_val_start = pd.DataFrame(pca_val_start, columns=[f'PC{i+1}' for i in range(num_comps_start)])
-    # df_val_end = pd.DataFrame(pca_val_end, columns=[f'PC{i+1}' for i in range(num_comps_end)])
     
     # ---------------- SAVE VARIABLES TO FILE ---------------- #
     
@@ -124,12 +116,12 @@ def create_pca(df, num_comps_start, num_comps_end):
     dump(scaler_end, pca_path + 'scaler_end.joblib')
 
 def main():
+
     # ---------------- ARGUMENT HANDLING ---------------- #
     parser = argparse.ArgumentParser(description="Run PCA range on certain models")
     parser.add_argument('--model', choices=['dt', 'gb', 'ebm'], required=True, help='Model to train')
-    parser.add_argument('--comps_1', nargs='+', required=False, help='Number of components to train model 1 with (folder must exist under "PCA/")')
-    parser.add_argument('--comps_2', nargs='+', required=False, help='Number of components to train model 2 with (folder must exist under "PCA/")')
-    parser.add_argument('--n_comps', nargs='+', required=False, help='List of number of components to train models with E.g. --n_comps 1 5 10 15')
+    parser.add_argument('--comps_1', nargs='+', required=False, help='List of component values for model 1 (E.g. 1 2 3)')
+    parser.add_argument('--comps_2', nargs='+', required=False, help='List of component values for model 2 (E.g. 1 2 3)')
     parser.add_argument('--file', type=str, required=True, help="CSV file to use (excluding extensions)")
     args = parser.parse_args()
     
@@ -177,7 +169,5 @@ def main():
             
     print(f"\nBest Accuracy: {best_acc} with {best_num} PCA components")
     
-    
-
 if __name__ == '__main__':
     main()
