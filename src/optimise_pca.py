@@ -130,11 +130,8 @@ def main():
         print("ERROR: File not found")
         exit()
     
-    if args.n_comps and (args.comps_1 is not None or args.comps_2):
-        print("n_comps can't be used if comps_1 or comps_2 are used.")
-        exit()
-    elif (args.comps_1 is None and args.comps_2) or (args.comps_1 and args.comps_2 is None):
-        print("If n_comps is not used, both comps_1 and comps_2 must be specified.")
+    if (args.comps_1 is None and args.comps_2) or (args.comps_1 and args.comps_2 is None):
+        print("Both comps_1 and comps_2 must be specified.")
         exit()
         
     # create dataframe
@@ -149,17 +146,12 @@ def main():
     acc_dict = {}
 
     # loop through and train each model on different pca component numbers
-    if args.n_comps:
-        for num in args.n_comps:
-            create_pca(df, int(num), int(num))
-            acc_dict[f"{num}_{num}"] = train_models(args.model, int(num), int(num))
             
-    else:
-        for num1 in args.comps_1:
-            for num2 in args.comps_2:
-                create_pca(df, int(num1), int(num2))
-                acc_dict[f"{num1}_{num2}"] = train_models(args.model, int(num1), int(num2))
-            
+    for num1 in args.comps_1:
+        for num2 in args.comps_2:
+            create_pca(df, int(num1), int(num2))
+            acc_dict[f"{num1}_{num2}"] = train_models(args.model, int(num1), int(num2))
+        
     # get the best accuracy
     best_acc, best_num = 0, ""
     for key, item in acc_dict.items():

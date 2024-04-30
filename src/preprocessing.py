@@ -453,6 +453,10 @@ def create_model_input(game, r_to=0, r_from=0, testing_move_number=-1, turn=1, t
     r_to = int(r_to)
     r_from = int(r_from)
     if r_to != 0:
+        # check if metadata includes time
+        if game.headers["WhiteElo"] == '?' or game.headers["BlackElo"] == '?':
+            return None
+        
         w_elo = int(game.headers["WhiteElo"])
         b_elo = int(game.headers["BlackElo"])
         if w_elo < r_from or w_elo > r_to or b_elo < r_from or b_elo > r_to:

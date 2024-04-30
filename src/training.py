@@ -391,8 +391,11 @@ def tune_hyper(X_start, X_end, y_start, y_end, model_name):
     best_params_end = opt_end.best_params_
     best_score_end = opt_end.best_score_
 
+    hyper_path = f"../hyperparameters/"
+    make_dir(hyper_path)
+
     # write to files
-    with open(f"../hyperparameters/{model_name}_end.txt", "a") as f:
+    with open(f"{hyper_path}{model_name}_end.txt", "a") as f:
         f.write(f"MODEL: {model_name}\n")
         f.write(f"\nParameters Tested: {gb_params}\nBest Parameters: {best_params_end}\nBest Mean CV Score: {best_score_end}\n--------------------")         
 
