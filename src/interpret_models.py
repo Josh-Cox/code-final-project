@@ -80,7 +80,7 @@ def combine_squares(shap_scaled, model):
     
     return np.array(all_shap)
 
-def interpret_tree(model_start, model_end, X_test_pca_start, X_test_pca_end, pca_start, pca_end, X_test_start, X_test_end, plot, plot_type, model_name, suffix):
+def interpret_tree(input_path, model_start, model_end, X_test_pca_start, X_test_pca_end, pca_start, pca_end, X_test_start, X_test_end, plot, plot_type, model_name, suffix):
     """
     Creates SHAP plots from given model and data
     
@@ -103,8 +103,8 @@ def interpret_tree(model_start, model_end, X_test_pca_start, X_test_pca_end, pca
     # ---------------- ORIGINAL COLUMN NAMES ---------------- #
     
     # get feature column names (excluding squares)
-    column_names_start = pd.read_csv('../data/lichess-2023-11-10k.csv').drop(columns=['board_pos', 'start_square', 'end_square']).columns.tolist()
-    column_names_end = pd.read_csv('../data/lichess-2023-11-10k.csv').drop(columns=['board_pos', 'end_square']).columns.tolist()
+    column_names_start = pd.read_csv(input_path).drop(columns=['board_pos', 'start_square', 'end_square']).columns.tolist()
+    column_names_end = pd.read_csv(input_path).drop(columns=['board_pos', 'end_square']).columns.tolist()
     column_names_start = column_names_start[:7]
     column_names_end = column_names_end[:7]
     
@@ -133,6 +133,8 @@ def interpret_tree(model_start, model_end, X_test_pca_start, X_test_pca_end, pca
     shap_pca_start = explainer_start.shap_values(X_test_pca_start)
     shap_pca_end = explainer_end.shap_values(X_test_pca_end)
 
+    shap_scaled_start = pca_start.inverse_transform(shap_pca_start)
+    
     # reverse the PCA to get original features
     shap_scaled_start = pca_start.inverse_transform(shap_pca_start)
     shap_scaled_end = pca_end.inverse_transform(shap_pca_end)
@@ -144,7 +146,6 @@ def interpret_tree(model_start, model_end, X_test_pca_start, X_test_pca_end, pca
     
     
     # ---------------- PLOTS ---------------- #
-    
     
     match plot:
         case 'all':
@@ -187,7 +188,7 @@ def interpret_tree(model_start, model_end, X_test_pca_start, X_test_pca_end, pca
 
     # display saved plots as subplot
     if plot != 'all':
-        display_plots(plot, plot_type, model_name)
+        display_plots(plot, plot_type, model_name, suffix)
     
 def save_plot(shap_values, X_test, column_names, model_number, plot, model_name, suffix, explainer=None):
     """
@@ -571,7 +572,8 @@ def main(args):
             exit()
             
         # get input data
-        input_data = pd.read_csv(f'{DATA_PREFIX}/{args.input}.csv')
+        input_path = f'{DATA_PREFIX}/{args.input}.csv'
+        input_data = pd.read_csv(input_path)
         # get input data and board
         X_start = input_data.drop(columns=['board_pos', 'end_square', 'start_square'])
         X_end = input_data.drop(columns=['board_pos', 'end_square'])
@@ -581,7 +583,6 @@ def main(args):
         X_end_scaled = scaler_end.transform(X_end)
         X_start_pca = pca_start.transform(X_start_scaled)
         X_end_pca = pca_end.transform(X_end_scaled)
-
 
     if args.model == 'ebm':
         # define the number of inputs to interpret (must be no larger than amount of inputs in given files)
@@ -597,7 +598,7 @@ def main(args):
 
     elif args.model == 'gb' or args.model == 'dt':
         with Halo(text=f'Interpreting predictions', color='grey', spinner="dots3"):
-            interpret_tree(model_start, model_end, X_start_pca, X_end_pca, pca_start, pca_end, X_start, X_end, args.plot, args.plot_type, args.model, args.suffix)
+            interpret_tree(input_path, model_start, model_end, X_start_pca, X_end_pca, pca_start, pca_end, X_start, X_end, args.plot, args.plot_type, args.model, args.suffix)
     elif args.model == 'pca':
         with Halo(text=f'Interpreting PCA loadings', color='grey', spinner="dots3"):
             pca_loadings(pca_start, pca_end, int(args.comps_1), int(args.comps_2), args.suffix)

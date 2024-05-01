@@ -50,7 +50,7 @@ SQUARES = {
 }
 
     
-def make_predictions(model_name, comps_1, comps_2, batch, files):
+def make_predictions(model_name, comps_1, comps_2, files):
     """
     Makes predictions using trained models
 
@@ -225,7 +225,7 @@ def make_predictions(model_name, comps_1, comps_2, batch, files):
     # start UI loop
     UI_loop(filtered_boards, filtered_preds, filtered_acc)
         
-def single_prediction(input_file, model_name, n_components, batch):
+def single_prediction(input_file, model_name, n_components):
     """
     Genreate predictions and probabilities for a single input position
     
@@ -239,10 +239,7 @@ def single_prediction(input_file, model_name, n_components, batch):
     # ---------------- SETUP VARIBALES ---------------- #
     
     # load trained model from file
-    if batch:
-        model_path = f'{PATH_PREFIX}/{model_name}/{model_name}_{n_components}_batch'
-    else:
-        model_path = f'{PATH_PREFIX}/{model_name}/{model_name}_{n_components}'
+    model_path = f'{PATH_PREFIX}/{model_name}/{model_name}_{n_components}'
     
     model = load(model_path + '/model.joblib')
 
@@ -469,19 +466,18 @@ def main():
     parser.add_argument('--comps_1', type=int, required=True, help='Number of components used to train model 1')
     parser.add_argument('--comps_2', type=int, required=True, help='Number of components used to train model 2')
     parser.add_argument('--input', type=str, required=True, help='Input file for prediction')
-    parser.add_argument('--batch', action='store_true', help='If the model was batch trained')
     args = parser.parse_args()
     
     
     # check required arguments are present
     if args.type == 'multiple':
-        make_predictions(args.model, args.comps_1, args.comps_2, args.batch, args.input)
+        make_predictions(args.model, args.comps_1, args.comps_2, args.input)
     elif args.type == 'single':
         if args.i is None:
             print("Single input must be specified (--input)")
             exit()
         else:
-            single_prediction(args.input, args.model, args.n_comps, args.batch)
+            single_prediction(args.input, args.model, args.n_comps)
 
     
 if __name__ == '__main__':
